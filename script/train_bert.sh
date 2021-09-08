@@ -1,0 +1,1 @@
+python run.py --templates train_bert --mode validate --pretrained_weights /pub/data/kyyx/wbc/MEANTIME/experiments/test/bert/models/recent_checkpoint.pth
