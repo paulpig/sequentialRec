@@ -1,6 +1,8 @@
 import torch
 from time import time
 import numpy as np
+import pdb
+import random
 
 
 def recall(scores, labels, k):
@@ -112,7 +114,7 @@ class timer:
         else:
             self.tape.append(timer.time() - self.start)
 
-def UniformSample_original(dataset):
+def UniformSample_original(dataset, rel_type=None):
     """
     the original impliment of BPR Sampling in LightGCN
     :return:
@@ -123,7 +125,9 @@ def UniformSample_original(dataset):
     # dataset : BasicDataset
     user_num = dataset.trainDataSize
     users = np.random.randint(0, dataset.n_users, user_num)
-    allPos = dataset.allPos
+    if rel_type == None:
+        allPos = dataset.allPos
+    # pdb.set_trace()
     S = []
     sample_time1 = 0.
     sample_time2 = 0.
@@ -146,6 +150,79 @@ def UniformSample_original(dataset):
         sample_time1 += end - start
     total = time() - total_start
     return np.array(S)
+
+
+def UniformSample_original_add_rel(dataset, S, rel_type):
+    """
+    the original impliment of BPR Sampling in LightGCN
+    :return:
+        np.array: (trainDataSize, 5), each element is <user, positem, negitem, posRel, negRel>
+    The parameter 'dataset' is from ./dataloaders/graph.py, class Loader;
+    """
+    total_start = time()
+    # dataset : BasicDataset
+    if rel_type == 'buy':
+        user_num = dataset.traindataSize_buy
+    elif rel_type == 'view':
+        user_num = dataset.traindataSize_view
+    
+    users = np.random.randint(0, dataset.n_users, user_num)
+    if rel_type == 'buy':
+        allPos = dataset._allPos_buy
+    else:
+        allPos = dataset._allPos_view
+
+    allPos_total = dataset._allPos
+    #选取不在任意一个图中的items;
+    # allPos = dataset._allPos
+    # pdb.set_trace()
+    # S = []
+    sample_time1 = 0.
+    sample_time2 = 0.
+    for i, user in enumerate(users):
+        start = time()
+        posForUser = allPos[user]
+        posForUser_total = allPos_total[user]
+        if len(posForUser) == 0:
+            continue
+        sample_time2 += time() - start
+        posindex = np.random.randint(0, len(posForUser))
+        positem = posForUser[posindex]
+        #get the posRel
+        if rel_type == 'buy':
+            posRel = 0
+        elif rel_type == 'view':
+            posRel = 1
+        
+        # pdb.set_trace()
+        while True:
+            negitem = np.random.randint(0, dataset.m_items)
+            # if negitem in posForUser:
+            if negitem in posForUser_total:
+                continue
+            else:
+                break
+        
+        negRel = random.randint(0,1)
+
+        S.append([user, positem, negitem, posRel, negRel]) #<user, positem, negitem>, 1:1:1
+        end = time()
+        sample_time1 += end - start
+    total = time() - total_start
+    # print("Sampling time:", total)
+    return S
+
+
+def minibatch_add_rel(*tensors, batch_size):
+
+    # batch_size = kwargs.get('batch_size', config['bpr_batch_size'])
+    if len(tensors) == 1:
+        tensor = tensors[0]
+        for i in range(0, len(tensor), batch_size):
+            yield tensor[i:i + batch_size]
+    else:
+        for i in range(0, len(tensors[0]), batch_size):
+            yield tuple(x[i:i + batch_size] for x in tensors)
 
 
 def minibatch(*tensors, batch_size):

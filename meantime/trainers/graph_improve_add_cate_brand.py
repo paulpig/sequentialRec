@@ -21,7 +21,7 @@ from pathlib import Path
 import os
 import pdb
 from meantime.dataloaders.graph import GraphLoader
-
+from meantime.dataloaders.graph_cate_brand import GraphLoaderCateBrand
 
 class GraphTrainer(AbstractTrainer):
     def __init__(self, args, model, train_loader, val_loader, test_loader, local_export_root):
@@ -44,11 +44,17 @@ class GraphTrainer(AbstractTrainer):
         user2id = dataset['umap']
         item2id = dataset['smap']
         self.graph_loader = GraphLoader(self.args, user2id, item2id)
+        #add cate
+        self.graph_loader_cate = GraphLoaderCateBrand(self.args, user2id, item2id)
         
         # pdb.set_trace()
         # self.graph_model = graph_model
         self.graph_model = LightGCN(self.args, self.graph_loader).to(self.device)
+        #add cate
+        self.graph_model_cate = LightGCN(self.args, self.graph_loader_cate).to(self.device)
+
         self.graph_epochs = args.graph_epochs
+        self.graph_cate_epochs = args.graph_cate_epochs
         # self.graph_optimizer = self._create_graph_optimizer() #创建图模型优化器;
         
         self.use_parallel = args.use_parallel
@@ -98,7 +104,7 @@ class GraphTrainer(AbstractTrainer):
 
     @classmethod
     def code(cls):
-        return 'graph_sasrec_improve'
+        return 'graph_sasrec_improve_add_cate_brand'
 
     def add_extra_loggers(self):
         pass
@@ -125,7 +131,58 @@ class GraphTrainer(AbstractTrainer):
 
         metrics = recalls_and_ndcgs_for_ks(scores, labels, self.metric_ks)
         return metrics
+
     
+    def trainGraphModelOneEpochCate(self, optim_graph):
+        """
+        训练基于cate的图模型;
+        """
+        # Recmodel = self.graph_model
+        # Recmodel.train()
+        self.graph_model_cate.train()
+        # bpr: utils.BPRLoss = loss_class
+
+        # self.weight_decay = config['decay']
+        self.weight_decay = self.args.weight_decay
+        # self.lr = config['lr']
+        
+        with timer(name="Sample"):
+            S = UniformSample_original(self.graph_loader_cate)
+        users = torch.Tensor(S[:, 0]).long()
+        posItems = torch.Tensor(S[:, 1]).long()
+        negItems = torch.Tensor(S[:, 2]).long() #(len(train_items))
+
+        users = users.to(self.args.device)
+        posItems = posItems.to(self.args.device)
+        negItems = negItems.to(self.args.device)
+        users, posItems, negItems = shuffle(users, posItems, negItems)
+        # total_batch = len(users) // world.config['bpr_batch_size'] + 1
+        total_batch = len(users) // self.args.bpr_batch_size + 1
+        aver_loss = 0.
+        # pdb.set_trace()
+        for (batch_i,
+            (batch_users,
+            batch_pos,
+            batch_neg)) in enumerate(minibatch(users, posItems, negItems, batch_size=self.args.bpr_batch_size)):
+            # cri = bpr.stageOne(batch_users, batch_pos, batch_neg)
+            # loss, reg_loss = self.model.bpr_loss(batch_users, batch_pos, batch_neg)
+            loss, reg_loss = self.graph_model_cate.bpr_loss(batch_users, batch_pos, batch_neg)
+            reg_loss = reg_loss*self.weight_decay
+            loss = loss + reg_loss
+
+            optim_graph.zero_grad()
+            loss.backward(retain_graph=True)
+            optim_graph.step()
+            cri = loss.cpu().item()
+            aver_loss += cri
+            # if world.tensorboard:
+            #     w.add_scalar(f'BPRLoss/BPR', cri, epoch * int(len(users) / world.config['bpr_batch_size']) + batch_i)
+        aver_loss = aver_loss / total_batch
+        time_info = timer.dict()
+        timer.zero()
+        return f"loss{aver_loss:.3f}-{time_info}"
+
+
     def trainGraphModelOneEpoch(self, optim_graph):
         # Recmodel = self.graph_model
         # Recmodel.train()
@@ -184,21 +241,30 @@ class GraphTrainer(AbstractTrainer):
         # add graph-based training
         self.lr = self.args.lr
         self.graph_opt = optim.Adam(self.graph_model.parameters(), lr=self.lr)
+        self.graph_opt_cate = optim.Adam(self.graph_model_cate.parameters(), lr=self.lr)
 
+        #预训练graph模型;
         for epoch in range(self.graph_epochs):
             info_train_loss = self.trainGraphModelOneEpoch(self.graph_opt)
-            print(info_train_loss)
+            print("Both buy and view loss:", info_train_loss)
+
+        #预预先cate_brand graph模型
+        for epoch in range(self.graph_cate_epochs):
+            info_train_loss = self.trainGraphModelOneEpochCate(self.graph_opt_cate)
+            print("cate_and_graph_loss:", info_train_loss)       
 
         print("Finish training the LightGCN model;")
 
         #加载模型的额外的参数
         self.model.createMergeParameter() #创建merge参数;
-
+        
         #pdb.set_trace()
         #get user and item embeddings
         self.user_hidden_rep, self.item_hidden_rep = self.graph_model.getUserItemEmb()
+        self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_cate.getUserItemEmb()
+
         #setting representations to sequential models; 由于user embedding不参与模型, 两个输出的均是item表征;
-        self.model.setUserItemRepFromGraph(self.user_hidden_rep, self.item_hidden_rep) #每次加载相同的hidden representatin, 不合理;
+        self.model.setUserItemRepFromGraph(self.user_hidden_rep, self.item_hidden_rep, self.user_hidden_rep_cate, self.item_hidden_rep_cate) #每次加载相同的hidden representatin, 不合理;
         
         print("Finish setting user embeddings and item embeddings;")
 
@@ -257,6 +323,7 @@ class GraphTrainer(AbstractTrainer):
     def train_one_epoch(self, epoch, accum_iter, train_loader, **kwargs):
         self.model.train()
         self.graph_model.train()
+        self.graph_model_cate.train()
 
         average_meter_set = AverageMeterSet()
         num_instance = 0
@@ -268,8 +335,9 @@ class GraphTrainer(AbstractTrainer):
                 
             #经过一次epoch, 重新获取item representation; 修改为每次batch就重新获取item representation;
             self.user_hidden_rep, self.item_hidden_rep = self.graph_model.getUserItemEmb()
+            self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_cate.getUserItemEmb()
             #setting representations to sequential models; 由于user embedding不参与模型, 两个输出的均是item表征;
-            self.model.setUserItemRepFromGraph(self.user_hidden_rep, self.item_hidden_rep) #每次加载相同的hidden representatin, 不合理;
+            self.model.setUserItemRepFromGraph(self.user_hidden_rep, self.item_hidden_rep, self.user_hidden_rep_cate, self.item_hidden_rep_cate) #每次加载相同的hidden representatin, 不合理;
 
             batch_size = next(iter(batch.values())).size(0)
             batch = {k:v.to(self.device) for k, v in batch.items()}
@@ -286,7 +354,7 @@ class GraphTrainer(AbstractTrainer):
 
             if self.clip_grad_norm is not None:
                 # torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip_grad_norm)
-                torch.nn.utils.clip_grad_norm_(list(self.model.parameters()) + list(self.graph_model.parameters()), self.clip_grad_norm)
+                torch.nn.utils.clip_grad_norm_(list(self.model.parameters()) + list(self.graph_model.parameters()) + list(self.graph_model_cate.parameters()), self.clip_grad_norm)
             
             # pdb.set_trace()
             # for name, parameters in self.graph_model.named_parameters():
@@ -330,7 +398,7 @@ class GraphTrainer(AbstractTrainer):
 
     def validate(self, epoch, accum_iter, mode, doLog=True, **kwargs):
         """
-            根据model来预测
+            根据model来预测, 测试时不需要图模型的forward步骤;
         """
         if mode == 'val':
             loader = self.val_loader
@@ -341,6 +409,7 @@ class GraphTrainer(AbstractTrainer):
 
         self.model.eval()
         self.graph_model.eval()
+        self.graph_model_cate.eval()
 
         average_meter_set = AverageMeterSet()
         num_instance = 0
@@ -409,21 +478,31 @@ class GraphTrainer(AbstractTrainer):
         args = self.args
         if args.optimizer.lower() == 'adam':
             betas = (args.adam_beta1, args.adam_beta2)
-            return optim.Adam(list(self.model.parameters()) + list(self.graph_model.parameters()), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
+            return optim.Adam(list(self.model.parameters()) + list(self.graph_model.parameters()) + list(self.graph_model_cate.parameters()), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
         elif args.optimizer.lower() == 'sgd':
-            return optim.SGD(list(self.model.parameters()) + list(self.graph_model.parameters()), lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
+            return optim.SGD(list(self.model.parameters()) + list(self.graph_model.parameters()) + list(self.graph_model_cate.parameters()), lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
         else:
             raise ValueError
     
-    def _create_graph_optimizer(self):
-        args = self.args
-        if args.optimizer.lower() == 'adam':
-            betas = (args.adam_beta1, args.adam_beta2)
-            return optim.Adam(self.graph_model.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
-        elif args.optimizer.lower() == 'sgd':
-            return optim.SGD(self.graph_model.parameters(), lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
-        else:
-            raise ValueError
+    # def _create_graph_optimizer(self):
+    #     args = self.args
+    #     if args.optimizer.lower() == 'adam':
+    #         betas = (args.adam_beta1, args.adam_beta2)
+    #         return optim.Adam(self.graph_model.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
+    #     elif args.optimizer.lower() == 'sgd':
+    #         return optim.SGD(self.graph_model.parameters(), lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
+    #     else:
+    #         raise ValueError
+
+    # def _create_graph_cate_optimizer(self):
+    #     args = self.args
+    #     if args.optimizer.lower() == 'adam':
+    #         betas = (args.adam_beta1, args.adam_beta2)
+    #         return optim.Adam(self.graph_model_cate.parameters(), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
+    #     elif args.optimizer.lower() == 'sgd':
+    #         return optim.SGD(self.graph_model_cate.parameters(), lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
+    #     else:
+    #         raise ValueError
 
     def _create_loggers(self):
         """

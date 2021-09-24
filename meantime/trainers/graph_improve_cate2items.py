@@ -20,7 +20,7 @@ from abc import *
 from pathlib import Path
 import os
 import pdb
-from meantime.dataloaders.graph import GraphLoader
+from meantime.dataloaders.graph_cate2items import GraphLoaderCate2Item as GraphLoader
 
 
 class GraphTrainer(AbstractTrainer):
@@ -98,7 +98,7 @@ class GraphTrainer(AbstractTrainer):
 
     @classmethod
     def code(cls):
-        return 'graph_sasrec_improve'
+        return 'graph_sasrec_improve_cate2items'
 
     def add_extra_loggers(self):
         pass
@@ -193,7 +193,7 @@ class GraphTrainer(AbstractTrainer):
 
         #加载模型的额外的参数
         self.model.createMergeParameter() #创建merge参数;
-
+        
         #pdb.set_trace()
         #get user and item embeddings
         self.user_hidden_rep, self.item_hidden_rep = self.graph_model.getUserItemEmb()

@@ -61,14 +61,14 @@ class AbstractDataset(metaclass=ABCMeta):
 
     def load_dataset(self):
         self.preprocess()
-        # dataset_path = self._get_preprocessed_dataset_path()
-        dataset_path = self._get_preprocessed_dataset_path_test()
+        dataset_path = self._get_preprocessed_dataset_path()
+        # dataset_path = self._get_preprocessed_dataset_path_test()
         dataset = pickle.load(dataset_path.open('rb'))
         return dataset
 
     def preprocess(self):
-        # dataset_path = self._get_preprocessed_dataset_path()
-        dataset_path = self._get_preprocessed_dataset_path_test()
+        dataset_path = self._get_preprocessed_dataset_path()
+        # dataset_path = self._get_preprocessed_dataset_path_test()
         if dataset_path.is_file():
             print('Already preprocessed. Skip preprocessing')
             print(dataset_path)
@@ -98,14 +98,32 @@ class AbstractDataset(metaclass=ABCMeta):
         num_days = df.days.max() + 1
 
         dataset = {'user2dict': user2dict,
-                   'train_targets': train_targets,
-                   'validation_targets': validation_targets,
-                   'test_targets': test_targets,
-                   'umap': umap,
-                   'smap': smap,
-                   'special_tokens': special_tokens,
-                   'num_ratings': num_ratings,
-                   'num_days': num_days}
+                    'train_targets': train_targets,
+                    'validation_targets': validation_targets,
+                    'test_targets': test_targets,
+                    'umap': umap,
+                    'smap': smap,
+                    'special_tokens': special_tokens,
+                    'num_ratings': num_ratings,
+                    'num_days': num_days}
+        
+        #添加cate的数据;
+        if self.args.add_cate_flag:
+            item_id2cate_id = dict()
+            cate2id = dict()
+            train_file = self.args.graph_path + self.args.graph_filename
+            with open(train_file) as f:
+                for l in f.readlines():
+                    if len(l) > 0:
+                        l = l.strip('\n').split(' ')
+                        items = [int(smap[i]) for i in l[1:]]
+                        #convert string to int
+                        if l[0] not in cate2id:
+                            cate2id[l[0]] = len(cate2id) + 1
+                        for item_id in items:
+                            item_id2cate_id[item_id] = cate2id[l[0]]
+            dataset['item_id2cate_id'] = item_id2cate_id
+            
 
         with dataset_path.open('wb') as f:
             pickle.dump(dataset, f)

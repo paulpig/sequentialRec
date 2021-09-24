@@ -10,7 +10,7 @@ import scipy.sparse as sp
 from time import time
 import pdb
 
-class GraphLoader():
+class GraphLoaderCate2Item():
     """
     Dataset type for pytorch \n
     Incldue graph information
@@ -56,7 +56,9 @@ class GraphLoader():
         # testUniqueUsers, testItem, testUser = [], [], []
         self.traindataSize = 0
         self.testDataSize = 0
-        single_edge_number = 0 
+        self.cate2id = dict()
+        self.item_id2cate_id = dict()
+
         with open(train_file) as f:
             for l in f.readlines():
                 if len(l) > 0:
@@ -64,33 +66,28 @@ class GraphLoader():
                     # items = [int(i) for i in l[1:]]
                     # pdb.set_trace()
                     items = [int(item2id[i]) for i in l[1:]]
-                    uid = int(item2id[l[0]])
-                    # if config.rm_self_node:
-                    #     items.remove(uid)
-                    if config.rm_self_node:
-                        if len(items) == 1: #删除自连边;
-                            single_edge_number += 1
-                            continue
                     #convert string to int
                     # uid = user2id[l[0]] #暂时不考虑user对模型的影响, 只考虑items共现的影响;
+                    if l[0] not in self.cate2id:
+                        self.cate2id[l[0]] = len(self.cate2id) + 1
+                    for item_id in items:
+                        self.item_id2cate_id[item_id] = self.cate2id[l[0]]
+                    # uid = int(item2id[l[0]])
+                    cate_id = int(self.cate2id[l[0]])
                     # uid = int(l[0])
-                    trainUniqueUsers.append(uid)
-                    trainUser.extend([uid] * len(items))
+                    trainUniqueUsers.append(cate_id)
+                    trainUser.extend([cate_id] * len(items))
                     trainItem.extend(items)
                     self.m_item = max(self.m_item, max(items))
-                    self.n_user = max(self.n_user, uid)
+                    self.n_user = max(self.n_user, cate_id)
                     self.traindataSize += len(items)
         self.trainUniqueUsers = np.array(trainUniqueUsers)
         self.trainUser = np.array(trainUser)
         self.trainItem = np.array(trainItem)
 
-        # self.m_item += 1 #为什么要加add 1
-        # self.n_user += 1
+        self.m_item += 1 #为什么要加add 1
+        self.n_user += 1
         
-        self.m_item = len(item2id) + 1
-        self.n_user = len(item2id) + 1
-
-        print("single_edge_number: {}".format(single_edge_number))
         print("item number: {}, user number:{}".format(self.m_item, self.n_user))
         if 'bert' in self.config.model_code:
             self.m_item += 1
@@ -103,6 +100,7 @@ class GraphLoader():
         print(f"Graph Sparsity: {(self.trainDataSize) / self.n_users / self.m_items}")
 
         # (users,items), bipartite graph
+        # 创建(n_cates, n_items)
         self.UserItemNet = csr_matrix((np.ones(len(self.trainUser)), (self.trainUser, self.trainItem)),
                                       shape=(self.n_user, self.m_item)) #第一参数: value, 第二个采纳数: index;
         # pdb.set_trace()
@@ -177,7 +175,7 @@ class GraphLoader():
                 print("successfully loaded...")
                 norm_adj = pre_adj_mat
             except :
-                print("generating adjacency matrix. Both Buy and view.")
+                print("generating adjacency matrix")
                 s = time()
                 adj_mat = sp.dok_matrix((self.n_users + self.m_items, self.n_users + self.m_items), dtype=np.float32) #为什么构建(user_num + item_num, user_num + item_num)矩阵;
                 adj_mat = adj_mat.tolil() #convert list of lists format;

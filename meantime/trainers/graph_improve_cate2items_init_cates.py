@@ -20,7 +20,7 @@ from abc import *
 from pathlib import Path
 import os
 import pdb
-from meantime.dataloaders.graph import GraphLoader
+from meantime.dataloaders.graph_cate2items import GraphLoaderCate2Item as GraphLoader
 
 
 class GraphTrainer(AbstractTrainer):
@@ -39,12 +39,14 @@ class GraphTrainer(AbstractTrainer):
             # self.graph_loader = graph_loader
         # pdb.set_trace()
         # mode = 'train'
-        dataset = get_dataloader(args).dataset
+        dataset = get_dataloader(args).dataset #重新加载数据了？？
         # pdb.set_trace()
         user2id = dataset['umap']
         item2id = dataset['smap']
         self.graph_loader = GraphLoader(self.args, user2id, item2id)
         
+        # self.item_id2cate_id = self.graph_loader.item_id2cate_id
+        # train_loader.setItemId2CateId(self.item_id2cate_id)
         # pdb.set_trace()
         # self.graph_model = graph_model
         self.graph_model = LightGCN(self.args, self.graph_loader).to(self.device)
@@ -98,7 +100,7 @@ class GraphTrainer(AbstractTrainer):
 
     @classmethod
     def code(cls):
-        return 'graph_sasrec_improve'
+        return 'graph_sasrec_improve_cate2items_init_cates'
 
     def add_extra_loggers(self):
         pass
@@ -193,7 +195,7 @@ class GraphTrainer(AbstractTrainer):
 
         #加载模型的额外的参数
         self.model.createMergeParameter() #创建merge参数;
-
+        
         #pdb.set_trace()
         #get user and item embeddings
         self.user_hidden_rep, self.item_hidden_rep = self.graph_model.getUserItemEmb()

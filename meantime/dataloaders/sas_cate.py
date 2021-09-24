@@ -12,6 +12,7 @@ class SasDataloader(AbstractDataloader):
         else:
             self.sas_timestamps = None
 
+    
     def calculate_sas_timestamps(self):
         sas_timestamps = {}  # user -> timestamps
         for user, dic in self.user2dict.items():
@@ -26,7 +27,7 @@ class SasDataloader(AbstractDataloader):
 
     @classmethod
     def code(cls):
-        return 'sas'
+        return 'sas_cate'
 
     def _get_dataset(self, mode):
         if mode == 'train':
@@ -39,26 +40,35 @@ class SasDataloader(AbstractDataloader):
     def _get_train_dataset(self):
         train_ranges = self.train_targets
         # pdb.set_trace()
-        dataset = SasTrainDataset(self.args, self.dataset, self.train_negative_samples, self.rng, train_ranges, self.sas_timestamps)
+        dataset = SasTrainDataset(self.args, self.dataset, self.train_negative_samples, self.rng, train_ranges, self.sas_timestamps, item_id2cate_id=self.item_id2cate_id)
         return dataset
 
     def _get_eval_dataset(self, mode):
         positions = self.validation_targets if mode=='val' else self.test_targets
-        dataset = SasEvalDataset(self.args, self.dataset, self.test_negative_samples, positions, self.sas_timestamps)
+        dataset = SasEvalDataset(self.args, self.dataset, self.test_negative_samples, positions, self.sas_timestamps, item_id2cate_id=self.item_id2cate_id)
         return dataset
 
 class SasTrainDataset(BertTrainDataset):
-    def __init__(self, args, dataset, negative_samples, rng, train_ranges, sas_timestamps):
+    def __init__(self, args, dataset, negative_samples, rng, train_ranges, sas_timestamps, item_id2cate_id=None):
         super().__init__(args, dataset, negative_samples, rng, train_ranges)
         self.timestamps = sas_timestamps
         self.marank_mode = args.model_code in ['marank']
         self.marank_max_len = args.marank_max_len  # actual max_len if marank_mode=True
         self.output_user = args.dataloader_output_user
         self.item_count = len(dataset['smap'])
-        
+        self.item2id = dataset['smap']
+        # self.id2item = dict([(value, key) for key, value in self.item2id.items()])
+        # self.item2cate = item2cate
+        # self.cate2id = cate2id
+        # self.item_id2cate_id = dict((self.item2id[key], self.cate2id[value]) for key, value in self.item2cate.items())
+        self.item_id2cate_id = item_id2cate_id #item_id to cate_id;
         if self.marank_mode:
             self.user2pos = {user:pos for user, pos in self.train_ranges}
-     
+    
+    # #设置item_id转化为cate_id的映射字典;
+    # def setItemId2CateId(self, item_id2cate_id):
+    #     self.item_id2cate_id = item_id2cate_id
+    
     def sample_negative_items(self, item_set, item_size):
         import random
         item = random.randint(1, item_size-1) 
@@ -94,16 +104,22 @@ class SasTrainDataset(BertTrainDataset):
             # negative_labels = [self.sample_negative_items(seq, self.item_count) for _ in labels] #将valid item和test item选入到negative items;
             negative_labels = [self.rng.choice(neg_samples) for _ in labels]
 
+            #添加cate_id作为side information;
+            cates = [self.item_id2cate_id[value] for value in tokens]
+            cates = [0] * padding_len + cates
+
             tokens = [0] * padding_len + tokens
             labels = [0] * padding_len + labels
             negative_labels = [0] * padding_len + negative_labels
 
+        
         # pdb.set_trace()
         # 数据增强
         d = {
             'tokens': torch.LongTensor(tokens),
             'labels': torch.LongTensor(labels),
-            'negative_labels': torch.LongTensor(negative_labels,)
+            'negative_labels': torch.LongTensor(negative_labels),
+            'cates': torch.LongTensor(cates)
         }
         if self.output_timestamps:
             timestamps = self.timestamps[user][beg:end-1]
@@ -115,13 +131,16 @@ class SasTrainDataset(BertTrainDataset):
 
 
 class SasEvalDataset(BertEvalDataset):
-    def __init__(self, args, dataset, negative_samples, positions, sas_timestamps):
+    def __init__(self, args, dataset, negative_samples, positions, sas_timestamps, item_id2cate_id=None):
         super().__init__(args, dataset, negative_samples, positions)
         self.timestamps = sas_timestamps
         self.output_user = args.dataloader_output_user
         self.marank_mode = args.model_code in ['marank']
         self.marank_max_len = args.marank_max_len
-
+        item2id = dataset['smap']
+        # self.item_id2cate_id = dict((item2id[key], cate2id[value]) for key, value in item2cate.items())
+        self.item_id2cate_id = item_id2cate_id
+    
     def __getitem__(self, index):
         user, pos = self.positions[index]
         seq = self.user2dict[user]['items']
@@ -148,12 +167,16 @@ class SasEvalDataset(BertEvalDataset):
         if self.marank_mode:
             seq = seq + [seq[-1]] * padding_len
         else:
+            #添加cate_id作为side information;
+            cates = [self.item_id2cate_id[value] for value in seq]
+            cates = [0] * padding_len + cates
             seq = [0] * padding_len + seq
 
         tokens = torch.LongTensor(seq)
         candidates = torch.LongTensor(candidates)
         labels = torch.LongTensor(labels)
-        d = {'tokens':tokens, 'candidates':candidates, 'labels':labels}
+        cates = torch.LongTensor(cates)
+        d = {'tokens':tokens, 'candidates':candidates, 'labels':labels, 'cates': cates}
         if self.output_timestamps:
             timestamps = self.timestamps[user][beg:end]
             timestamps = [0] * padding_len + timestamps

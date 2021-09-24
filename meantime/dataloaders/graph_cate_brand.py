@@ -10,7 +10,7 @@ import scipy.sparse as sp
 from time import time
 import pdb
 
-class GraphLoader():
+class GraphLoaderCateBrand():
     """
     Dataset type for pytorch \n
     Incldue graph information
@@ -46,7 +46,7 @@ class GraphLoader():
         # train_file = path + '/rm_low_items_cocurrence_correct.txt' #未保证target item没有提前泄露;
         # train_file = path + '/rm_2_low_items_cocurrence_correct_rm_valid.txt' #未保证target item没有提前泄露;
         # train_file = path + '/rm_5_low_items_cocurrence_correct_rm_valid.txt' #未保证target item没有提前泄露;
-        train_file = path + config.graph_filename
+        train_file = path + config.graph_filename_cate_brand
         
         print("Loading datafile is: ", train_file)
         # train_file = path
@@ -173,11 +173,11 @@ class GraphLoader():
         if self.Graph is None:
             try:
                 # pre_adj_mat = sp.load_npz(self.path + '/s_pre_adj_mat_{}.npz'.format(self.config.model_code))
-                pre_adj_mat = sp.load_npz(self.path + '/s_pre_adj_mat_{}.npz'.format(self.config.experiment_name))
+                pre_adj_mat = sp.load_npz(self.path + '/s_pre_adj_mat_cate_{}.npz'.format(self.config.experiment_name))
                 print("successfully loaded...")
                 norm_adj = pre_adj_mat
             except :
-                print("generating adjacency matrix. Both Buy and view.")
+                print("generating adjacency matrix cate !!!!!!!!!!!!!!!!!")
                 s = time()
                 adj_mat = sp.dok_matrix((self.n_users + self.m_items, self.n_users + self.m_items), dtype=np.float32) #为什么构建(user_num + item_num, user_num + item_num)矩阵;
                 adj_mat = adj_mat.tolil() #convert list of lists format;
@@ -201,7 +201,7 @@ class GraphLoader():
                 end = time()
                 print(f"costing {end-s}s, saved norm_mat...")
                 # sp.save_npz(self.path + '/s_pre_adj_mat_{}.npz'.format(self.config.model_code), norm_adj)
-                sp.save_npz(self.path + '/s_pre_adj_mat_{}.npz'.format(self.config.experiment_name), norm_adj)
+                sp.save_npz(self.path + '/s_pre_adj_mat_cate_{}.npz'.format(self.config.experiment_name), norm_adj)
 
             if self.split == True:
                 self.Graph = self._split_A_hat(norm_adj)

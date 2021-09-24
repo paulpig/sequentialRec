@@ -56,13 +56,17 @@ class PositionalEmbedding(nn.Module):
 
 
 class PositionalEmbeddingDirect(nn.Module):
+    """
+    维度是2*hidden_unit
+    """
     def __init__(self, args):
         super().__init__()
         max_len = args.max_len
-        hidden = args.hidden_units
+        hidden = args.hidden_units * 2
         self.emb = nn.Embedding(max_len, hidden)
 
-    def forward(self, x):
+    def forward(self, d, keyword='tokens'):
+        x = d[keyword]
         batch_size = x.size(0)
         return self.emb.weight.unsqueeze(0).repeat(batch_size, 1, 1)  # B x T x H
 

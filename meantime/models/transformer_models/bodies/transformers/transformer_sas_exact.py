@@ -3,18 +3,23 @@ from meantime.models.transformer_models.utils import PositionwiseFeedForward
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
+import pdb
 
 
 class ExactSasTransformerBlock(nn.Module):
-    def __init__(self, args):
+    def __init__(self, args, double_input=False):
         super().__init__()
         attn_heads = args.num_heads
-        hidden = args.hidden_units
+        if double_input:
+            # pdb.set_trace()
+            hidden = args.hidden_units * 2
+        else:
+            hidden = args.hidden_units
         # feed_forward_hidden = 4 * hidden
-        feed_forward_hidden = hidden  # H->H->H instead of H->4H->H in PFF
+        # feed_forward_hidden = hidden  # H->H->H instead of H->4H->H in PFF
         dropout = args.dropout
         self.attention = MultiHeadedAttention(h=attn_heads, d_model=hidden, dropout=dropout)
-        self.feed_forward = PositionwiseFeedForward(d_model=hidden, d_ff=feed_forward_hidden, dropout=dropout, act='relu')
+        self.feed_forward = PositionwiseFeedForward(d_model=hidden, d_ff=hidden, dropout=dropout, act='relu')
         self.norm1 = nn.LayerNorm(hidden)
         self.norm2 = nn.LayerNorm(hidden)
         self.dropout = nn.Dropout(p=dropout)

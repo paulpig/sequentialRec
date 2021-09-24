@@ -6,21 +6,22 @@ from meantime.utils import fix_random_seed_as
 from meantime.analyze_table import find_saturation_point
 from meantime.dataloaders import get_dataloader
 from .utils import recalls_and_ndcgs_for_ks
+import numpy as np
 
 from .base import AbstractTrainer
-from meantime.trainers.utils import UniformSample_original, timer, minibatch, shuffle
+from meantime.trainers.utils import UniformSample_original_add_rel, timer, minibatch_add_rel, shuffle
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
 import pandas as pd
-from meantime.models.transformer_models.lightGCN import LightGCN
+from meantime.models.transformer_models.lightGCN_heterogeneous import LightGCNHeterogeneous as LightGCN
 
 from abc import *
 from pathlib import Path
 import os
 import pdb
-from meantime.dataloaders.graph import GraphLoader
+from meantime.dataloaders.graph_heterogeneous import GraphLoaderHeterogeneous as GraphLoader
 
 
 class GraphTrainer(AbstractTrainer):
@@ -98,7 +99,7 @@ class GraphTrainer(AbstractTrainer):
 
     @classmethod
     def code(cls):
-        return 'graph_sasrec_improve'
+        return 'graph_sasrec_improve_heterogeneous'
 
     def add_extra_loggers(self):
         pass
@@ -137,15 +138,24 @@ class GraphTrainer(AbstractTrainer):
         # self.lr = config['lr']
         
         with timer(name="Sample"):
-            S = UniformSample_original(self.graph_loader)
+            S = []
+            S = UniformSample_original_add_rel(self.graph_loader, S, 'buy')
+            S = UniformSample_original_add_rel(self.graph_loader, S, 'view')
+            S = np.array(S)
+            # pdb.set_trace()
+        # pdb.set_trace()
         users = torch.Tensor(S[:, 0]).long()
         posItems = torch.Tensor(S[:, 1]).long()
         negItems = torch.Tensor(S[:, 2]).long() #(len(train_items))
+        posRels = torch.Tensor(S[:, 3]).long() #(len(train_items))
+        negRels = torch.Tensor(S[:, 4]).long() #(len(train_items))
 
         users = users.to(self.args.device)
         posItems = posItems.to(self.args.device)
         negItems = negItems.to(self.args.device)
-        users, posItems, negItems = shuffle(users, posItems, negItems)
+        posRels = posRels.to(self.args.device)
+        negRels = negRels.to(self.args.device)
+        users, posItems, negItems, posRels, negRels= shuffle(users, posItems, negItems, posRels, negRels)
         # total_batch = len(users) // world.config['bpr_batch_size'] + 1
         total_batch = len(users) // self.args.bpr_batch_size + 1
         aver_loss = 0.
@@ -153,10 +163,13 @@ class GraphTrainer(AbstractTrainer):
         for (batch_i,
             (batch_users,
             batch_pos,
-            batch_neg)) in enumerate(minibatch(users, posItems, negItems, batch_size=self.args.bpr_batch_size)):
+            batch_neg,
+            batch_pos_rel,
+            batch_neg_rel)) in enumerate(minibatch_add_rel(users, posItems, negItems, posRels, negRels, batch_size=self.args.bpr_batch_size)):
             # cri = bpr.stageOne(batch_users, batch_pos, batch_neg)
             # loss, reg_loss = self.model.bpr_loss(batch_users, batch_pos, batch_neg)
-            loss, reg_loss = self.graph_model.bpr_loss(batch_users, batch_pos, batch_neg)
+            loss, reg_loss = self.graph_model.bpr_loss_add_rel(batch_users, batch_pos, batch_neg, batch_pos_rel, batch_neg_rel)
+            # loss, reg_loss = self.graph_model.bpr_loss(batch_users, batch_pos, batch_neg, batch_pos_rel, batch_neg_rel)
             reg_loss = reg_loss*self.weight_decay
             loss = loss + reg_loss
 
@@ -193,12 +206,12 @@ class GraphTrainer(AbstractTrainer):
 
         #加载模型的额外的参数
         self.model.createMergeParameter() #创建merge参数;
-
+        
         #pdb.set_trace()
         #get user and item embeddings
-        self.user_hidden_rep, self.item_hidden_rep = self.graph_model.getUserItemEmb()
+        self.user_hidden_buy, self.item_hidden_buy, self.user_hidden_view, self.item_hidden_view = self.graph_model.getUserItemEmb()
         #setting representations to sequential models; 由于user embedding不参与模型, 两个输出的均是item表征;
-        self.model.setUserItemRepFromGraph(self.user_hidden_rep, self.item_hidden_rep) #每次加载相同的hidden representatin, 不合理;
+        self.model.setUserItemRepFromGraph(self.user_hidden_buy, self.item_hidden_buy, self.user_hidden_view, self.item_hidden_view) #每次加载相同的hidden representatin, 不合理;
         
         print("Finish setting user embeddings and item embeddings;")
 
@@ -267,9 +280,13 @@ class GraphTrainer(AbstractTrainer):
                 break
                 
             #经过一次epoch, 重新获取item representation; 修改为每次batch就重新获取item representation;
-            self.user_hidden_rep, self.item_hidden_rep = self.graph_model.getUserItemEmb()
+            # self.user_hidden_rep, self.item_hidden_rep = self.graph_model.getUserItemEmb()
+            # #setting representations to sequential models; 由于user embedding不参与模型, 两个输出的均是item表征;
+            # self.model.setUserItemRepFromGraph(self.user_hidden_rep, self.item_hidden_rep) #每次加载相同的hidden representatin, 不合理;
+
+            self.user_hidden_buy, self.item_hidden_buy, self.user_hidden_view, self.item_hidden_view = self.graph_model.getUserItemEmb()
             #setting representations to sequential models; 由于user embedding不参与模型, 两个输出的均是item表征;
-            self.model.setUserItemRepFromGraph(self.user_hidden_rep, self.item_hidden_rep) #每次加载相同的hidden representatin, 不合理;
+            self.model.setUserItemRepFromGraph(self.user_hidden_buy, self.item_hidden_buy, self.user_hidden_view, self.item_hidden_view) #
 
             batch_size = next(iter(batch.values())).size(0)
             batch = {k:v.to(self.device) for k, v in batch.items()}

@@ -43,7 +43,7 @@ class SASModel(BaseModel):
 
     @classmethod
     def code(cls):
-        return 'sas_finetune_graph_improve_ablation'
+        return 'sas_finetune_graph_improve_ablation_add_cate'
 
 
     def setUserItemRepFromGraph(self, user_rep_graph, item_rep_graph):
@@ -69,6 +69,7 @@ class SASModel(BaseModel):
         if self.training:
             labels = d['labels']
             negative_labels = d['negative_labels']
+            # cates = d['cates']
             loss, loss_cnt = self.get_loss(logits, labels, negative_labels)
             # loss, loss_cnt = self.get_loss_as_bert(logits, labels, negative_labels, d)
             ret['loss'] = loss
@@ -79,7 +80,11 @@ class SASModel(BaseModel):
             # candidate_embeddings = self.token_embedding.emb(d['candidates'])  # B x C x H
             x = d['candidates'] #(bs, C)
             x_unsqueeenze = x.reshape(-1) #(bs*C)
+            # cate = d['cates']
+            # cate = cate.reshape(-1)
+            # cate_e = self.user_rep_graph[cate, :].reshape(cate.size(0), cate.size(1), -1)
             candidate_embeddings = self.item_rep_graph[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1) 
+
             scores = (last_logits * candidate_embeddings).sum(-1)  # B x C
             ret['scores'] = scores
         return ret
@@ -89,8 +94,9 @@ class SASModel(BaseModel):
         add the graph representation; 
         """
         x = d['tokens'] #(bs, sl)
-
+        cate = d['cates']
         
+        cate_unsqueeenze = cate.reshape(-1)
         x_unsqueeenze = x.reshape(-1)
         # pdb.set_trace()
 
@@ -99,7 +105,11 @@ class SASModel(BaseModel):
         # e = self.token_embedding(d) + self.positional_embedding(d)
 
         #采用图模型输出的表征初始化序列推荐模型item lookup table, 初始化的效果增强;
+        # pdb.set_trace()
+        cate_e = self.user_rep_graph[cate_unsqueeenze, :].reshape(cate.size(0), cate.size(1), -1)
         graph_e = self.item_rep_graph[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1) #(bs, sl, dim) #use the hidden representation to init the embedding lookup table;
+        
+        # e = graph_e + self.positional_embedding(d) + cate_e
         e = graph_e + self.positional_embedding(d)
 
         #concat the representation from the graph and the init item embedding;
@@ -146,6 +156,9 @@ class SASModel(BaseModel):
 
         valid_labels_emb = self.item_rep_graph[valid_labels, :]  # M x H
         valid_negative_labels_emb = self.item_rep_graph[valid_negative_labels, :]  # M x H
+
+        # cates = cates.reshape(-1)
+        # cate_e = self.user_rep_graph[cates, :]
 
         valid_labels_prob = self.sigmoid((valid_logits * valid_labels_emb).sum(-1))  # M
         valid_negative_labels_prob = self.sigmoid((valid_logits * valid_negative_labels_emb).sum(-1))  # M

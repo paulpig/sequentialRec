@@ -22,6 +22,7 @@ def train(args):
     if communicator:
         communicator.close()  # close station because it might lose connection during long training
     train_loader, val_loader, test_loader = dataloader_factory(args)
+    # pdb.set_trace()
     #add graph loader;
     model = model_factory(args)
     trainer = trainer_factory(args, model, train_loader, val_loader, test_loader, local_export_root)

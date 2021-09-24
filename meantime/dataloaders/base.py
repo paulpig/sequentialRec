@@ -32,10 +32,16 @@ class AbstractDataloader(metaclass=ABCMeta):
         args.num_ratings = dataset['num_ratings']
         args.num_days = dataset['num_days']
 
+        # if self.args.add_cate_flag:
+        if args.add_cate_flag:
+            # pdb.set_trace()
+            self.item_id2cate_id = self.dataset['item_id2cate_id']
+
         code = args.train_negative_sampler_code
         # if args.trainer_code == 'sas': #在整个数据集中采用负样本;
         #     # pdb.set_trace()
         #     args.train_negative_sample_size = self.item_count
+        # pdb.set_trace()
         train_negative_sampler = negative_sampler_factory(code, self.user2dict,
                                                           self.user_count, self.item_count,
                                                           args.train_negative_sample_size,
@@ -70,7 +76,7 @@ class AbstractDataloader(metaclass=ABCMeta):
                       'val':self.args.val_batch_size,
                       'test':self.args.test_batch_size}[mode]
 
-        dataset = self._get_dataset(mode)
+        dataset = self._get_dataset(mode) #例如SasTrainDataset;
 
         # shuffle = True if mode == 'train' else False
         # sampler = None
