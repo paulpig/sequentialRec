@@ -52,7 +52,7 @@ class LightGCNHeterogeneous(BertBaseModel):
         UserItemNet_view = self.dataset.UserItemNet_view
         UserItemNet_both = self.dataset.UserItemNet_both
         rel_type = 'buy'
-        self.Graph_buy = self.dataset.getSparseGraph(UserItemNet_buy, rel_type, UserItemNet_both)
+        self.Graph_buy = self.dataset.getSparseGraph(UserItemNet_buy, rel_type, UserItemNet_both) 
         rel_type = 'view'
         self.Graph_view = self.dataset.getSparseGraph(UserItemNet_view, rel_type, UserItemNet_both)
 

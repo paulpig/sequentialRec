@@ -46,8 +46,9 @@ class GraphLoader():
         # train_file = path + '/rm_low_items_cocurrence_correct.txt' #未保证target item没有提前泄露;
         # train_file = path + '/rm_2_low_items_cocurrence_correct_rm_valid.txt' #未保证target item没有提前泄露;
         # train_file = path + '/rm_5_low_items_cocurrence_correct_rm_valid.txt' #未保证target item没有提前泄露;
-        train_file = path + config.graph_filename
-        
+        # train_file = path + config.graph_filename #重新构建, 每行由<head, rel, tail> 构成;
+        train_file = path + config.graph_filename_kgat #重新构建, 每行由<head, rel, tail> 构成;
+          
         print("Loading datafile is: ", train_file)
         # train_file = path
         # test_file = path + '/test.txt' #不需要测试集, 在整个数据集中pretrain来获取每个item的表征;
@@ -57,37 +58,52 @@ class GraphLoader():
         self.traindataSize = 0
         self.testDataSize = 0
         single_edge_number = 0 
+
+        self.rel2id = {}
+        self.attribute2id = {}
+
+        self.all_head_list = []
+        self.all_rel_list = []
+        self.all_tail_list = []
+
+        #重写构建邻接矩阵代码这段逻辑, 不仅获取初始化邻接矩阵, 而且得到head, rel and tail list, 用于构建KGE loss and updating the adjacent matrix.
         with open(train_file) as f:
             for l in f.readlines():
                 if len(l) > 0:
                     l = l.strip('\n').split(' ')
-                    # items = [int(i) for i in l[1:]]
-                    # pdb.set_trace()
-                    items = [int(item2id[i]) for i in l[1:]]
+                    rel = l[1]
+                    attribute = l[2]
+
+                    if rel not in self.rel2id:
+                        self.rel2id[rel] = len(self.rel2id)
+                    
+                    if attribute not in self.attribute2id:
+                        self.attribute2id[attribute] = len(self.attribute2id)
+
+                    rel_id = int(self.rel2id[rel])
+                    attribute_id = int(self.attribute2id[attribute])
                     uid = int(item2id[l[0]])
-                    # if config.rm_self_node:
-                    #     items.remove(uid)
-                    if config.rm_self_node:
-                        if len(items) == 1: #删除自连边;
-                            single_edge_number += 1
-                            continue
-                    #convert string to int
-                    # uid = user2id[l[0]] #暂时不考虑user对模型的影响, 只考虑items共现的影响;
-                    # uid = int(l[0])
-                    trainUniqueUsers.append(uid)
-                    trainUser.extend([uid] * len(items))
-                    trainItem.extend(items)
-                    self.m_item = max(self.m_item, max(items))
+
+                    
+                    self.all_head_list.append(uid)
+                    self.all_rel_list.append(rel_id)
+                    self.all_tail_list.append(attribute_id)
+
+
+                    trainUser.append(uid)
+                    trainItem.append(attribute_id)
+                    self.m_item = max(self.m_item, attribute_id)
                     self.n_user = max(self.n_user, uid)
-                    self.traindataSize += len(items)
-        self.trainUniqueUsers = np.array(trainUniqueUsers)
-        self.trainUser = np.array(trainUser)
-        self.trainItem = np.array(trainItem)
+                    self.traindataSize += 1
+        # self.trainUniqueUsers = np.array(trainUniqueUsers)
+        self.trainUser = np.array(trainUser) #item数量;
+        self.trainItem = np.array(trainItem) #attribute数量;
 
         # self.m_item += 1 #为什么要加add 1
         # self.n_user += 1
         
-        self.m_item = len(item2id) + 1
+        # self.m_item = len(item2id) + 1
+        self.m_item = len(self.attribute2id) + 1
         self.n_user = len(item2id) + 1
 
         print("single_edge_number: {}".format(single_edge_number))
@@ -118,6 +134,24 @@ class GraphLoader():
         # self.__testDict = self.__build_test()
         print("Success to create the graph dataloader.")
         # print(f"{world.dataset} is ready to go")
+
+        #{user: (rel, item)}
+        graph_kge = {}
+        for i, head in enumerate(self.all_head_list):
+            if head not in graph_kge:
+                graph_kge[head] = [(self.all_rel_list[i], self.all_tail_list[i])]
+            else:
+                graph_kge[head].append((self.all_rel_list[i], self.all_tail_list[i]))
+        self.graph_kge = graph_kge
+        # pdb.set_trace()
+
+    
+    def conductHeadRelTailList(self, ):
+        """
+        conducting the head list, the rel list and the tail list.
+        """
+
+        return
 
     @property
     def n_users(self):
@@ -169,11 +203,11 @@ class GraphLoader():
         """
             构建归一化矩阵;
         """
-        print("loading lightgcn adjacency matrix")
+        print("loading kgat adjacency matrix")
         if self.Graph is None:
             try:
                 # pre_adj_mat = sp.load_npz(self.path + '/s_pre_adj_mat_{}.npz'.format(self.config.model_code))
-                pre_adj_mat = sp.load_npz(self.path + '/s_pre_adj_mat_{}.npz'.format(self.config.experiment_name))
+                pre_adj_mat = sp.load_npz(self.path + '/s_pre_adj_mat_{}_kgat.npz'.format(self.config.experiment_name))
                 print("successfully loaded...")
                 norm_adj = pre_adj_mat
             except :
@@ -201,7 +235,7 @@ class GraphLoader():
                 end = time()
                 print(f"costing {end-s}s, saved norm_mat...")
                 # sp.save_npz(self.path + '/s_pre_adj_mat_{}.npz'.format(self.config.model_code), norm_adj)
-                sp.save_npz(self.path + '/s_pre_adj_mat_{}.npz'.format(self.config.experiment_name), norm_adj)
+                sp.save_npz(self.path + '/s_pre_adj_mat_{}_kgat.npz'.format(self.config.experiment_name), norm_adj)
 
             if self.split == True:
                 self.Graph = self._split_A_hat(norm_adj)
@@ -211,6 +245,7 @@ class GraphLoader():
                 self.Graph = self.Graph.coalesce().to(self.config.device)
                 print("don't split the matrix")
         return self.Graph
+
 
     # def __build_test(self):
     #     """

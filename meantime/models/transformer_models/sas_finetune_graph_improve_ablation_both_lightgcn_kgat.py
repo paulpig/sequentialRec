@@ -45,7 +45,7 @@ class SASModel(BaseModel):
 
     @classmethod
     def code(cls):
-        return 'sas_finetune_graph_improve_ablation_both_item_user'
+        return 'graph_sasrec_improve_lightgcn_kgat'
 
 
 
@@ -55,19 +55,23 @@ class SASModel(BaseModel):
 
         self.W_graph_para_1 = nn.Linear(self.args.hidden_units, self.args.hidden_units).cuda()
         self.W_graph_para_2 = nn.Linear(self.args.hidden_units, self.args.hidden_units).cuda()
+
+        self.W_graph_para_1_1 = nn.Linear(self.args.hidden_units, self.args.hidden_units).cuda()
+        self.W_graph_para_2_1 = nn.Linear(self.args.hidden_units, self.args.hidden_units).cuda()
         return
 
     
-    def setUserItemRepFromGraph(self, user_rep_graph, item_rep_graph):
+    def setUserItemRepFromGraph(self, user_rep_buy, item_rep_buy, user_rep_view, item_rep_view):
         """
         The representations from the LightGCN model; 
         user_rep_graph: (|users|, dim)
         item_rep_graph: (|items|, dim)
         """
-        self.user_rep_graph = user_rep_graph
-        self.item_rep_graph = item_rep_graph
+        self.user_rep_graph_buy = user_rep_buy
+        self.item_rep_graph_buy = item_rep_buy
 
-        pdb.set_trace()
+        self.user_rep_graph_attribute = user_rep_view
+        self.item_rep_graph_attribute = item_rep_view
         return
     
 
@@ -92,11 +96,21 @@ class SASModel(BaseModel):
             # candidate_embeddings = self.token_embedding.emb(d['candidates'])  # B x C x H
             x = d['candidates'] #(bs, C)
             x_unsqueeenze = x.reshape(-1) #(bs*C)
-            candidate_embeddings_graph_1 = self.item_rep_graph[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
-            candidate_embeddings_graph_2 = self.user_rep_graph[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
+            candidate_embeddings_graph_1 = self.item_rep_graph_buy[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
+            candidate_embeddings_graph_2 = self.user_rep_graph_buy[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
             candidate_embeddings_gate = torch.sigmoid(self.W_graph_para_1(candidate_embeddings_graph_1) + self.W_graph_para_2(candidate_embeddings_graph_2))
             # gate = torch.sigmoid(self.W1_para(candidate_embeddings_bert) + self.W2_para(candidate_embeddings_graph))
-            candidate_embeddings = candidate_embeddings_gate * candidate_embeddings_graph_1 + (1. - candidate_embeddings_gate) * candidate_embeddings_graph_2
+            candidate_embeddings_buy = candidate_embeddings_gate * candidate_embeddings_graph_1 + (1. - candidate_embeddings_gate) * candidate_embeddings_graph_2
+            
+            # candidate_embeddings_graph_1 = self.item_rep_graph_view[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
+            candidate_embeddings_graph_attribute = self.user_rep_graph_attribute[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
+            candidate_embeddings_gate = torch.sigmoid(self.W_graph_para_1_1(candidate_embeddings_buy) + self.W_graph_para_2_1(candidate_embeddings_graph_attribute))
+            # gate = torch.sigmoid(self.W1_para(candidate_embeddings_bert) + self.W2_para(candidate_embeddings_graph))
+            # candidate_embeddings_review = candidate_embeddings_gate * candidate_embeddings_graph_1 + (1. - candidate_embeddings_gate) * candidate_embeddings_graph_2
+
+            # candidate_embeddings = candidate_embeddings_buy + candidate_embeddings_review
+            candidate_embeddings = candidate_embeddings_buy * candidate_embeddings_gate + (1. - candidate_embeddings_gate) * candidate_embeddings_graph_attribute
+
             scores = (last_logits * candidate_embeddings).sum(-1)  # B x C
             ret['scores'] = scores
         return ret
@@ -117,11 +131,22 @@ class SASModel(BaseModel):
 
         #采用图模型输出的表征初始化序列推荐模型item lookup table, 初始化的效果增强;
         # graph_e = self.item_rep_graph[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1) #(bs, sl, dim) #use the hidden representation to init the embedding lookup table;
-        candidate_embeddings_graph_1 = self.item_rep_graph[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
-        candidate_embeddings_graph_2 = self.user_rep_graph[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
+        candidate_embeddings_graph_1 = self.item_rep_graph_buy[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
+        candidate_embeddings_graph_2 = self.item_rep_graph_buy[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
         candidate_embeddings_gate = torch.sigmoid(self.W_graph_para_1(candidate_embeddings_graph_1) + self.W_graph_para_2(candidate_embeddings_graph_2))
         # gate = torch.sigmoid(self.W1_para(candidate_embeddings_bert) + self.W2_para(candidate_embeddings_graph))
-        graph_e = candidate_embeddings_gate * candidate_embeddings_graph_1 + (1. - candidate_embeddings_gate) * candidate_embeddings_graph_2
+        graph_e_buy = candidate_embeddings_gate * candidate_embeddings_graph_1 + (1. - candidate_embeddings_gate) * candidate_embeddings_graph_2
+
+
+        candidate_embeddings_graph_attribute = self.user_rep_graph_attribute[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
+        # candidate_embeddings_graph_2 = self.user_rep_graph_view[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
+        candidate_embeddings_gate = torch.sigmoid(self.W_graph_para_1_1(graph_e_buy) + self.W_graph_para_2_1(candidate_embeddings_graph_attribute))
+        # gate = torch.sigmoid(self.W1_para(candidate_embeddings_bert) + self.W2_para(candidate_embeddings_graph))
+        graph_e = candidate_embeddings_gate * graph_e_buy + (1. - candidate_embeddings_gate) * candidate_embeddings_graph_attribute
+
+        # graph_e = graph_e_buy + graph_e_review
+        # graph_e = graph_e_buy
+
         e = graph_e + self.positional_embedding(d)
 
         #concat the representation from the graph and the init item embedding;
@@ -166,17 +191,34 @@ class SASModel(BaseModel):
         # valid_labels_emb = self.token_embedding.emb(valid_labels)  # M x H
         # valid_negative_labels_emb = self.token_embedding.emb(valid_negative_labels)  # M x H
 
-        valid_labels_emb_graph_1 = self.item_rep_graph[valid_labels, :]  # M x H
-        valid_labels_emb_graph_2 = self.user_rep_graph[valid_labels, :]  # M x H
+        valid_labels_emb_graph_1 = self.item_rep_graph_buy[valid_labels, :]  # M x H
+        valid_labels_emb_graph_2 = self.item_rep_graph_buy[valid_labels, :]  # M x H
         valid_labels_gate = torch.sigmoid(self.W_graph_para_1(valid_labels_emb_graph_1) + self.W_graph_para_2(valid_labels_emb_graph_2))
-        valid_labels_emb = valid_labels_gate * valid_labels_emb_graph_1 + (1. - valid_labels_gate) * valid_labels_emb_graph_2
+        valid_labels_emb_buy = valid_labels_gate * valid_labels_emb_graph_1 + (1. - valid_labels_gate) * valid_labels_emb_graph_2
+
+
+        valid_labels_emb_graph_attribute = self.user_rep_graph_attribute[valid_labels, :]  # M x H
+        # valid_labels_emb_graph_2 = self.item_rep_graph_view[valid_labels, :]  # M x H
+        valid_labels_gate = torch.sigmoid(self.W_graph_para_1_1(valid_labels_emb_buy) + self.W_graph_para_2_1(valid_labels_emb_graph_attribute))
+        valid_labels_emb = valid_labels_gate * valid_labels_emb_buy + (1. - valid_labels_gate) * valid_labels_emb_graph_attribute
+
+        # valid_labels_emb = valid_labels_emb_buy + valid_labels_emb_review
+        # valid_labels_emb = valid_labels_emb_buy
         
-        valid_negative_labels_emb_graph_1 = self.item_rep_graph[valid_negative_labels, :]  # M x H
-        valid_negative_labels_emb_graph_2 = self.user_rep_graph[valid_negative_labels, :]  # M x H
+        valid_negative_labels_emb_graph_1 = self.item_rep_graph_buy[valid_negative_labels, :]  # M x H
+        valid_negative_labels_emb_graph_2 = self.item_rep_graph_buy[valid_negative_labels, :]  # M x H
         valid_negative_labels_gate = torch.sigmoid(self.W_graph_para_1(valid_negative_labels_emb_graph_1) + self.W_graph_para_2(valid_negative_labels_emb_graph_2))
-        valid_negative_labels_emb = valid_negative_labels_gate * valid_negative_labels_emb_graph_1 + (1. - valid_negative_labels_gate) * valid_negative_labels_emb_graph_2
+        valid_negative_labels_emb_buy = valid_negative_labels_gate * valid_negative_labels_emb_graph_1 + (1. - valid_negative_labels_gate) * valid_negative_labels_emb_graph_2
         # valid_negative_labels_emb = self.item_rep_graph[valid_negative_labels, :]  # M x H
         
+        valid_negative_labels_emb_graph_attribute = self.user_rep_graph_attribute[valid_negative_labels, :]  # M x H
+        # valid_negative_labels_emb_graph_2 = self.item_rep_graph_view[valid_negative_labels, :]  # M x H
+        valid_negative_labels_gate = torch.sigmoid(self.W_graph_para_1_1(valid_negative_labels_emb_buy) + self.W_graph_para_2_1(valid_negative_labels_emb_graph_attribute))
+        valid_negative_labels_emb = valid_negative_labels_gate * valid_negative_labels_emb_buy + (1. - valid_negative_labels_gate) * valid_negative_labels_emb_graph_attribute
+
+        # valid_negative_labels_emb = valid_negative_labels_emb_buy + valid_negative_labels_emb_review
+        # valid_negative_labels_emb = valid_negative_labels_emb_buy
+
         valid_labels_prob = self.sigmoid((valid_logits * valid_labels_emb).sum(-1))  # M
         valid_negative_labels_prob = self.sigmoid((valid_logits * valid_negative_labels_emb).sum(-1))  # M
 

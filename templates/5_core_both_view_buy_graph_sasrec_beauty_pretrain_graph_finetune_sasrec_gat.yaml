@@ -8,7 +8,7 @@ num_items: null
 num_ratings: null
 num_days: null
 local_data_folder: ./Data
-dataset_code: cellphones
+dataset_code: beauty
 # min_rating: 0
 min_rating: 0
 min_uc: 5
@@ -34,7 +34,7 @@ test_negative_sampler_code: random
 test_negative_sample_size: 100
 # test_negative_sampling_seed: 98765
 test_negative_sampling_seed: 42
-trainer_code: graph_sasrec_improve_heterogeneous
+trainer_code: graph_sasrec_improve_kgat
 device: cuda
 # use_parallel: true
 use_parallel: false
@@ -62,7 +62,7 @@ saturation_wait_epochs: 20
 # saturation_wait_epochs: 10
 # model_code: sas
 # model_code: sas_finetune
-model_code: sas_finetune_graph_improve_ablation_both_item_user
+model_code: sas_finetune_graph_improve_ablation
 # model_init_seed: 0
 model_init_seed: 42
 model_init_range: 0.02
@@ -93,7 +93,7 @@ experiment_group: test
 # experiment_name: sas_v2
 # experiment_name: bert_beauty_bert_baseline_argument_occurrence_graph_improve_add_pretrain
 # experiment_name: bert_beauty_bert_baseline_argument_occurrence_graph_improve_add_pretrain_ablation
-experiment_name: 5_core_both_view_buy_graph_sasrec_cellphone_pretrain_graph_finetune_sasrec_heterogeneous_both_in_out_rep_v2
+experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_graph_finetune_sasrec_single_rep_kgat
 # experiment_name: 5_core_both_view_buy_no_pretrain_graph_finetune_sasrec
 # experiment_name: bert_beauty_bert_baseline_argument_test_v6
 # experiment_name: bert_beauty_bert_baseline_argument
@@ -107,10 +107,8 @@ meta: training
 # resume_training: true
 finetune_flag: false
 resume_training: false
-graph_path: /pub/data/kyyx/wbc/MEANTIME/Data/cellphones/
-graph_filename: 5_core_cellphones_rm_2_low_items_graph_both_view_buy.txt
-# graph_filename_buy: 5_core_cellphones_rm_2_low_items_graph_only_buy.txt
-# graph_filename_view: 5_core_cellphones_rm_2_low_items_graph_only_view.txt
+graph_path: /pub/data/kyyx/wbc/MEANTIME/Data/beauty/
+# graph_filename: 5_core_beauty_rm_2_low_items_graph_both_view_buy.txt
 graph_filename_kgat: beauty_item_attribute_triple.txt
 latent_dim_rec: 64
 lightGCN_n_layers: 2
@@ -129,3 +127,4 @@ bpr_batch_size: 2048
 add_graph_flag: true
 gru_layer_number: 2
 add_cate_flag: false
+kg_l2loss_lambda: 0.00001

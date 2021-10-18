@@ -151,6 +151,110 @@ def UniformSample_original(dataset, rel_type=None):
     total = time() - total_start
     return np.array(S)
 
+def sample_pos_triples_for_h(kg_dict, head, n_sample_pos_triples):
+        pos_triples = kg_dict[head]
+        n_pos_triples = len(pos_triples)
+
+        sample_relations, sample_pos_tails = [], []
+        while True:
+            if len(sample_relations) == n_sample_pos_triples:
+                break
+
+            pos_triple_idx = np.random.randint(low=0, high=n_pos_triples, size=1)[0]
+            # tail = pos_triples[pos_triple_idx][0]
+            # relation = pos_triples[pos_triple_idx][1]
+            tail = pos_triples[pos_triple_idx][1]
+            relation = pos_triples[pos_triple_idx][0]
+
+            if relation not in sample_relations and tail not in sample_pos_tails:
+                sample_relations.append(relation)
+                sample_pos_tails.append(tail)
+        return sample_relations, sample_pos_tails
+
+
+def sample_neg_triples_for_h(kg_dict, head, relation, n_sample_neg_triples, attribute_voc):
+        pos_triples = kg_dict[head]
+
+        sample_neg_tails = []
+        while True:
+            if len(sample_neg_tails) == n_sample_neg_triples:
+                break
+
+            tail = np.random.randint(low=0, high=attribute_voc, size=1)[0]
+            if (relation, tail) not in pos_triples and tail not in sample_neg_tails:
+                sample_neg_tails.append(tail)
+        return sample_neg_tails
+
+
+def UniformSample_original_KGE(dataset, rel_type=None):
+    """
+    The input of the KGE.
+    :return:
+        np.array: (trainDataSize, 4), each element is <user, rels, positem, negitem>
+    The parameter 'dataset' is from ./dataloaders/graph.py, class Loader;
+    """
+
+    total_start = time()
+    # dataset : BasicDataset
+    graph_kge_dict = dataset.graph_kge
+    userNum = len(graph_kge_dict.keys())
+    all_head = list(graph_kge_dict.keys())
+    trainNumber = len(dataset.all_head_list)
+    attribute_voc = len(dataset.attribute2id)
+
+    # pdb.set_trace()
+    users = np.random.randint(0, userNum, trainNumber)
+    S = []
+    for user_index in users:
+        head = all_head[user_index]
+        sample_relations, sample_pos_tails = sample_pos_triples_for_h(graph_kge_dict, head, 1)
+        sample_neg_tails = sample_neg_triples_for_h(graph_kge_dict, head, sample_relations[0], 1, attribute_voc)
+        S.append([head, sample_relations[0], sample_pos_tails[0], sample_neg_tails[0]])
+    
+    return np.array(S)
+
+    # attribute2id = dataset.attribute2id
+
+    # S = []
+    # for i, head in enumerate(all_head_list):
+    #     while True:
+    #         negitem = np.random.randint(0, len(attribute2id))
+    #         if negitem == all_tail_list[i]:
+    #             continue
+    #         else:
+    #             break
+    #     S.append([head, all_rel_list[i], all_tail_list[i], negitem])
+
+    # return np.array(S)
+    # user_num = dataset.trainDataSize
+    # users = np.random.randint(0, dataset.n_users, user_num)
+    # if rel_type == None:
+    #     allPos = dataset.allPos
+    # # pdb.set_trace()
+    # S = []
+    # sample_time1 = 0.
+    # sample_time2 = 0.
+    # for i, user in enumerate(users):
+    #     start = time()
+    #     posForUser = allPos[user]
+    #     if len(posForUser) == 0:
+    #         continue
+    #     sample_time2 += time() - start
+    #     posindex = np.random.randint(0, len(posForUser))
+    #     positem = posForUser[posindex]
+    #     while True:
+    #         negitem = np.random.randint(0, dataset.m_items)
+    #         if negitem in posForUser:
+    #             continue
+    #         else:
+    #             break
+    #     S.append([user, positem, negitem]) #<user, positem, negitem>, 1:1:1
+    #     end = time()
+    #     sample_time1 += end - start
+    # total = time() - total_start
+    # return np.array(S)
+
+
 
 def UniformSample_original_add_rel(dataset, S, rel_type):
     """

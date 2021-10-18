@@ -52,8 +52,12 @@ class SASModel(BaseModel):
         user_rep_graph: (|users|, dim)
         item_rep_graph: (|items|, dim)
         """
-        self.user_rep_graph = user_rep_graph
-        self.item_rep_graph = item_rep_graph
+        # self.user_rep_graph = user_rep_graph
+        # self.item_rep_graph = item_rep_graph
+
+        #交换两个表征;
+        self.user_rep_graph = item_rep_graph
+        self.item_rep_graph = user_rep_graph
         # pdb.set_trace()
         return
     

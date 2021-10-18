@@ -169,7 +169,7 @@ class GraphLoader():
         """
             构建归一化矩阵;
         """
-        print("loading lightgcn adjacency matrix")
+        print("loading adjacency matrix")
         if self.Graph is None:
             try:
                 # pre_adj_mat = sp.load_npz(self.path + '/s_pre_adj_mat_{}.npz'.format(self.config.model_code))
