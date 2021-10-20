@@ -69,7 +69,8 @@ model_init_seed: 42
 model_init_range: 0.02
 # max_len: 200
 max_len: 50
-hidden_units: 64
+# hidden_units: 64
+hidden_units: 128
 num_blocks: 2
 num_heads: 2
 # num_heads: 4
@@ -94,7 +95,12 @@ experiment_group: test
 # experiment_name: sas_v2
 # experiment_name: bert_beauty_bert_baseline_argument_occurrence_graph_improve_add_pretrain
 # experiment_name: bert_beauty_bert_baseline_argument_occurrence_graph_improve_add_pretrain_ablation
-experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_merge_v2
+# experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_merge_rm_kgat
+# experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_merge_v3
+# experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_merge_rm_kgat
+# experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_merge_rm_lightgcn
+# experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_concat
+experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_gate_20_10
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_graph_finetune_sasrec
 # experiment_name: 5_core_both_view_buy_no_pretrain_graph_finetune_sasrec_bot
 # experiment_name: bert_beauty_bert_baseline_argument_test_v6
@@ -114,6 +120,7 @@ graph_path: /pub/data/kyyx/wbc/MEANTIME/Data/beauty/
 graph_filename_kgat: beauty_item_attribute_triple.txt
 graph_filename: 5_core_beauty_rm_2_low_items_graph_both_view_buy.txt
 latent_dim_rec: 64
+# latent_dim_rec: 128
 lightGCN_n_layers: 2
 keep_prob: 0.5
 A_split: false
@@ -121,7 +128,7 @@ graph_pretrain: false
 graph_dropout: false
 pooling_type: None
 graph_epochs: 20
-graph_attribute_epochs: 20
+graph_attribute_epochs: 10
 # graph_epochs: 1
 bpr_batch_size: 2048
 add_graph_flag: true
@@ -129,3 +136,7 @@ gru_layer_number: 2
 add_cate_flag: false
 kg_l2loss_lambda: 0.00001
 rm_self_node: false
+# merge_type: rm_kgat
+# merge_type: rm_lightgcn
+merge_type: gate
+# merge_type: concat

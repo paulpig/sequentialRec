@@ -52,6 +52,9 @@ class KGAT(BertBaseModel):
         self.W_R = nn.Parameter(torch.Tensor(self.rel_nums, self.latent_dim, self.latent_dim))
         nn.init.normal_(self.W_R, std=0.1)
 
+        self.W_R_hidden = nn.Parameter(torch.Tensor(self.rel_nums, self.latent_dim, self.latent_dim))
+        nn.init.normal_(self.W_R_hidden, std=0.1)
+
         # if self.config['pretrain'] == 0:
         if self.config.graph_pretrain == False:
 #             nn.init.xavier_uniform_(self.embedding_user.weight, gain=1)
@@ -80,6 +83,9 @@ class KGAT(BertBaseModel):
         self.all_rel_tensor = torch.Tensor(self.all_rel_list ).long().to(dtype=torch.long, device=self.config.device)
         self.all_tail_tensor = torch.Tensor(self.all_tail_list ).long().to(dtype=torch.long, device=self.config.device)
 
+
+        self.W_graph_para_1 = nn.Linear(self.latent_dim, self.latent_dim)
+        self.W_graph_para_2 = nn.Linear(self.latent_dim, self.latent_dim)
         # print(f"lgn is already to go(dropout:{self.config['dropout']})")
         print(f"lgn is already to go(dropout:{self.config.graph_dropout})")
 
@@ -140,11 +146,19 @@ class KGAT(BertBaseModel):
                 for f in range(len(g_droped)):
                     temp_emb.append(torch.sparse.mm(g_droped[f], all_emb))
                 side_emb = torch.cat(temp_emb, dim=0)
-                all_emb = side_emb
+                all_emb_neighbor = side_emb
             else:
                 # pdb.set_trace()
-                all_emb = torch.sparse.mm(g_droped, all_emb)
+                all_emb_neighbor = torch.sparse.mm(g_droped, all_emb)
+
+            
+            if self.config.kgat_merge == "bilinear":
+                all_emb = F.leaky_relu(self.W_graph_para_1(all_emb_neighbor + all_emb)) + F.leaky_relu(self.W_graph_para_2(all_emb_neighbor * all_emb_neighbor))
+            elif self.config.kgat_merge == "lightgcn":
+                all_emb = all_emb_neighbor
+
             embs.append(all_emb)
+
         embs = torch.stack(embs, dim=1)
         #print(embs.size())
         light_out = torch.mean(embs, dim=1)
@@ -168,7 +182,7 @@ class KGAT(BertBaseModel):
         neg_emb_ego = self.embedding_item(neg_items)
         return users_emb, pos_emb, neg_emb, users_emb_ego, pos_emb_ego, neg_emb_ego
     
-    def bpr_loss(self, users, pos, neg):
+    def bpr_loss(self, users, pos, neg, rel):
         # pdb.set_trace()
         #以user表征为中心, item分别正负样本;
         (users_emb, pos_emb, neg_emb, 
@@ -176,6 +190,12 @@ class KGAT(BertBaseModel):
         reg_loss = (1/2)*(userEmb0.norm(2).pow(2) + 
                          posEmb0.norm(2).pow(2)  +
                          negEmb0.norm(2).pow(2))/float(len(users))
+        
+        W_R_param = self.W_R_hidden[rel] #(bs, dim, dim)
+        # users_emb = torch.bmm(users_emb.unsqueeze(1), W_R_param).squeeze(1) #(bs, dim)
+        pos_emb = torch.bmm(pos_emb.unsqueeze(1), W_R_param).squeeze(1)
+        neg_emb = torch.bmm(neg_emb.unsqueeze(1), W_R_param).squeeze(1)
+
         pos_scores = torch.mul(users_emb, pos_emb)
         pos_scores = torch.sum(pos_scores, dim=1)
         neg_scores = torch.mul(users_emb, neg_emb)
@@ -198,7 +218,13 @@ class KGAT(BertBaseModel):
 
     
     def getUserItemEmb(self):
-        all_users, all_items = self.computer()
+        # all_users, all_items = self.computer()
+        if self.config.kgat_output == "emb":
+            all_users = self.embedding_user.weight
+            all_items = self.embedding_item.weight
+        elif self.config.kgat_output == "hidden":
+            all_users, all_items = self.computer()
+            
         return all_users, all_items
 
 

@@ -48,16 +48,24 @@ class SASModel(BaseModel):
         return 'graph_sasrec_improve_lightgcn_kgat'
 
 
-
     def createMergeParameter(self):
-        self.W1_para = nn.Linear(self.args.hidden_units, 1).cuda()
-        self.W2_para = nn.Linear(self.args.hidden_units, 1).cuda()
+        # hidden_W = self.args.hidden_units // 2
+        if self.args.merge_type == "concat":
+            hidden_W = self.args.hidden_units //2
+        else:
+            hidden_W = self.args.hidden_units
+        
+        self.W1_para_1 = nn.Linear(hidden_W, 1).cuda()
+        self.W1_para_2 = nn.Linear(hidden_W, 1).cuda()
+        self.W1_para_3 = nn.Linear(hidden_W, 1).cuda()
 
-        self.W_graph_para_1 = nn.Linear(self.args.hidden_units, self.args.hidden_units).cuda()
-        self.W_graph_para_2 = nn.Linear(self.args.hidden_units, self.args.hidden_units).cuda()
+        self.W_graph_para_1 = nn.Linear(hidden_W, hidden_W).cuda()
+        self.W_graph_para_2 = nn.Linear(hidden_W, hidden_W).cuda()
 
-        self.W_graph_para_1_1 = nn.Linear(self.args.hidden_units, self.args.hidden_units).cuda()
-        self.W_graph_para_2_1 = nn.Linear(self.args.hidden_units, self.args.hidden_units).cuda()
+        self.W_graph_para_1_1 = nn.Linear(hidden_W, hidden_W).cuda()
+        self.W_graph_para_2_1 = nn.Linear(hidden_W, hidden_W).cuda()
+        self.W_graph_para_3_1 = nn.Linear(hidden_W, hidden_W).cuda()
+        # W_graph_para_3_1
         return
 
     
@@ -101,16 +109,29 @@ class SASModel(BaseModel):
             candidate_embeddings_gate = torch.sigmoid(self.W_graph_para_1(candidate_embeddings_graph_1) + self.W_graph_para_2(candidate_embeddings_graph_2))
             # gate = torch.sigmoid(self.W1_para(candidate_embeddings_bert) + self.W2_para(candidate_embeddings_graph))
             candidate_embeddings_buy = candidate_embeddings_gate * candidate_embeddings_graph_1 + (1. - candidate_embeddings_gate) * candidate_embeddings_graph_2
-            
-            # candidate_embeddings_graph_1 = self.item_rep_graph_view[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
             candidate_embeddings_graph_attribute = self.user_rep_graph_attribute[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
-            candidate_embeddings_gate = torch.sigmoid(self.W_graph_para_1_1(candidate_embeddings_buy) + self.W_graph_para_2_1(candidate_embeddings_graph_attribute))
-            # gate = torch.sigmoid(self.W1_para(candidate_embeddings_bert) + self.W2_para(candidate_embeddings_graph))
-            # candidate_embeddings_review = candidate_embeddings_gate * candidate_embeddings_graph_1 + (1. - candidate_embeddings_gate) * candidate_embeddings_graph_2
 
-            # candidate_embeddings = candidate_embeddings_buy + candidate_embeddings_review
-            candidate_embeddings = candidate_embeddings_buy * candidate_embeddings_gate + (1. - candidate_embeddings_gate) * candidate_embeddings_graph_attribute
-
+            if self.args.merge_type == "gate":
+                # candidate_embeddings_graph_1 = self.item_rep_graph_view[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
+                candidate_embeddings_gate = torch.sigmoid(self.W_graph_para_1_1(candidate_embeddings_buy) + self.W_graph_para_2_1(candidate_embeddings_graph_attribute))
+                # gate = torch.sigmoid(self.W1_para(candidate_embeddings_bert) + self.W2_para(candidate_embeddings_graph))
+                # candidate_embeddings_review = candidate_embeddings_gate * candidate_embeddings_graph_1 + (1. - candidate_embeddings_gate) * candidate_embeddings_graph_2
+                # candidate_embeddings = candidate_embeddings_buy + candidate_embeddings_review
+                candidate_embeddings = candidate_embeddings_buy * candidate_embeddings_gate + (1. - candidate_embeddings_gate) * candidate_embeddings_graph_attribute
+            elif self.args.merge_type == "rm_kgat":
+                candidate_embeddings = candidate_embeddings_buy
+            elif self.args.merge_type == "rm_lightgcn":
+                candidate_embeddings = candidate_embeddings_graph_attribute
+            elif self.args.merge_type == "concat":
+                candidate_embeddings = torch.cat((candidate_embeddings_buy, candidate_embeddings_graph_attribute), dim=-1)
+            elif self.args.merge_type == "attention":
+                seq_1 = self.W1_para_1(torch.tanh(self.W_graph_para_1_1(candidate_embeddings_graph_1)))#(bs, sl, 1)
+                seq_2 = self.W1_para_2(torch.tanh(self.W_graph_para_2_1(candidate_embeddings_graph_2))) #(bs, sl, 1)
+                seq_3 = self.W1_para_3(torch.tanh(self.W_graph_para_3_1(candidate_embeddings_graph_attribute))) #(bs, sl, 1)
+                seq_merge = torch.cat([seq_1, seq_2, seq_3], dim=-1)
+                seq_merge_weight = nn.functional.softmax(seq_merge, dim=-1) #(bs, sl, 3)
+                seq_merge_tensor = torch.cat([torch.unsqueeze(candidate_embeddings_graph_1, dim=-2), torch.unsqueeze(candidate_embeddings_graph_2, dim=-2), torch.unsqueeze(candidate_embeddings_graph_attribute, dim=-2)], dim=-2) #(bs, sl, 3, dim)
+                candidate_embeddings = (seq_merge_tensor * torch.unsqueeze(seq_merge_weight, dim=-1)).sum(-2) #(bs, sl, dim)
             scores = (last_logits * candidate_embeddings).sum(-1)  # B x C
             ret['scores'] = scores
         return ret
@@ -132,18 +153,37 @@ class SASModel(BaseModel):
         #采用图模型输出的表征初始化序列推荐模型item lookup table, 初始化的效果增强;
         # graph_e = self.item_rep_graph[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1) #(bs, sl, dim) #use the hidden representation to init the embedding lookup table;
         candidate_embeddings_graph_1 = self.item_rep_graph_buy[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
-        candidate_embeddings_graph_2 = self.item_rep_graph_buy[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
+        candidate_embeddings_graph_2 = self.user_rep_graph_buy[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
         candidate_embeddings_gate = torch.sigmoid(self.W_graph_para_1(candidate_embeddings_graph_1) + self.W_graph_para_2(candidate_embeddings_graph_2))
         # gate = torch.sigmoid(self.W1_para(candidate_embeddings_bert) + self.W2_para(candidate_embeddings_graph))
         graph_e_buy = candidate_embeddings_gate * candidate_embeddings_graph_1 + (1. - candidate_embeddings_gate) * candidate_embeddings_graph_2
-
-
         candidate_embeddings_graph_attribute = self.user_rep_graph_attribute[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
+        
+        if self.args.merge_type == "gate":
+            # candidate_embeddings_graph_1 = self.item_rep_graph_view[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
+            candidate_embeddings_gate = torch.sigmoid(self.W_graph_para_1_1(graph_e_buy) + self.W_graph_para_2_1(candidate_embeddings_graph_attribute))
+            graph_e = graph_e_buy * candidate_embeddings_gate + (1. - candidate_embeddings_gate) * candidate_embeddings_graph_attribute
+        elif self.args.merge_type == "rm_kgat":
+            graph_e = graph_e_buy
+        elif self.args.merge_type == "rm_lightgcn":
+            graph_e = candidate_embeddings_graph_attribute
+        elif self.args.merge_type == "concat":
+            graph_e = torch.cat((graph_e_buy, candidate_embeddings_graph_attribute), dim=-1)
+        elif self.args.merge_type == "attention":
+            seq_1 = self.W1_para_1(torch.tanh(self.W_graph_para_1_1(candidate_embeddings_graph_1)))#(bs, sl, 1)
+            seq_2 = self.W1_para_2(torch.tanh(self.W_graph_para_2_1(candidate_embeddings_graph_2))) #(bs, sl, 1)
+            seq_3 = self.W1_para_3(torch.tanh(self.W_graph_para_3_1(candidate_embeddings_graph_attribute))) #(bs, sl, 1)
+            seq_merge = torch.cat([seq_1, seq_2, seq_3], dim=-1)
+            seq_merge_weight = nn.functional.softmax(seq_merge, dim=-1) #(bs, sl, 3)
+            seq_merge_tensor = torch.cat([torch.unsqueeze(candidate_embeddings_graph_1, dim=-2), torch.unsqueeze(candidate_embeddings_graph_2, dim=-2), torch.unsqueeze(candidate_embeddings_graph_attribute, dim=-2)], dim=-2) #(bs, sl, 3, dim)
+            # pdb.set_trace()
+            graph_e = (seq_merge_tensor * torch.unsqueeze(seq_merge_weight, dim=-1)).sum(-2) #(bs, sl, dim)
         # candidate_embeddings_graph_2 = self.user_rep_graph_view[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
-        candidate_embeddings_gate = torch.sigmoid(self.W_graph_para_1_1(graph_e_buy) + self.W_graph_para_2_1(candidate_embeddings_graph_attribute))
+        # candidate_embeddings_gate = torch.sigmoid(self.W_graph_para_1_1(graph_e_buy) + self.W_graph_para_2_1(candidate_embeddings_graph_attribute))
         # gate = torch.sigmoid(self.W1_para(candidate_embeddings_bert) + self.W2_para(candidate_embeddings_graph))
-        graph_e = candidate_embeddings_gate * graph_e_buy + (1. - candidate_embeddings_gate) * candidate_embeddings_graph_attribute
-
+        # graph_e = candidate_embeddings_gate * graph_e_buy + (1. - candidate_embeddings_gate) * candidate_embeddings_graph_attribute
+        
+        # graph_e = torch.cat((graph_e_buy, candidate_embeddings_graph_attribute), dim=-1) #(bs, sl, 2*dim)
         # graph_e = graph_e_buy + graph_e_review
         # graph_e = graph_e_buy
 
@@ -192,29 +232,66 @@ class SASModel(BaseModel):
         # valid_negative_labels_emb = self.token_embedding.emb(valid_negative_labels)  # M x H
 
         valid_labels_emb_graph_1 = self.item_rep_graph_buy[valid_labels, :]  # M x H
-        valid_labels_emb_graph_2 = self.item_rep_graph_buy[valid_labels, :]  # M x H
+        valid_labels_emb_graph_2 = self.user_rep_graph_buy[valid_labels, :]  # M x H
         valid_labels_gate = torch.sigmoid(self.W_graph_para_1(valid_labels_emb_graph_1) + self.W_graph_para_2(valid_labels_emb_graph_2))
         valid_labels_emb_buy = valid_labels_gate * valid_labels_emb_graph_1 + (1. - valid_labels_gate) * valid_labels_emb_graph_2
-
-
         valid_labels_emb_graph_attribute = self.user_rep_graph_attribute[valid_labels, :]  # M x H
+
+        if self.args.merge_type == "gate":
+            candidate_embeddings_gate = torch.sigmoid(self.W_graph_para_1_1(valid_labels_emb_buy) + self.W_graph_para_2_1(valid_labels_emb_graph_attribute))
+            valid_labels_emb = valid_labels_emb_buy * candidate_embeddings_gate + (1. - candidate_embeddings_gate) * valid_labels_emb_graph_attribute
+        elif self.args.merge_type == "rm_kgat":
+            valid_labels_emb = valid_labels_emb_buy
+        elif self.args.merge_type == "rm_lightgcn":
+            valid_labels_emb = valid_labels_emb_graph_attribute
+        elif self.args.merge_type == "concat":
+            valid_labels_emb = torch.cat((valid_labels_emb_buy, valid_labels_emb_graph_attribute), dim=-1)
+        elif self.args.merge_type == "attention":
+            seq_1 = self.W1_para_1(torch.tanh(self.W_graph_para_1_1(valid_labels_emb_graph_1)))#(bs, sl, 1)
+            seq_2 = self.W1_para_2(torch.tanh(self.W_graph_para_2_1(valid_labels_emb_graph_2))) #(bs, sl, 1)
+            seq_3 = self.W1_para_3(torch.tanh(self.W_graph_para_3_1(valid_labels_emb_graph_attribute))) #(bs, sl, 1)
+            seq_merge = torch.cat([seq_1, seq_2, seq_3], dim=-1)
+            seq_merge_weight = nn.functional.softmax(seq_merge, dim=-1) #(bs, sl, 3)
+            seq_merge_tensor = torch.cat([torch.unsqueeze(valid_labels_emb_graph_1, dim=-2), torch.unsqueeze(valid_labels_emb_graph_2, dim=-2), torch.unsqueeze(valid_labels_emb_graph_attribute, dim=-2)], dim=-2) #(bs, sl, 3, dim)
+            valid_labels_emb = (seq_merge_tensor * torch.unsqueeze(seq_merge_weight, dim=-1)).sum(-2) #(bs, sl, dim)
         # valid_labels_emb_graph_2 = self.item_rep_graph_view[valid_labels, :]  # M x H
-        valid_labels_gate = torch.sigmoid(self.W_graph_para_1_1(valid_labels_emb_buy) + self.W_graph_para_2_1(valid_labels_emb_graph_attribute))
-        valid_labels_emb = valid_labels_gate * valid_labels_emb_buy + (1. - valid_labels_gate) * valid_labels_emb_graph_attribute
+        # valid_labels_gate = torch.sigmoid(self.W_graph_para_1_1(valid_labels_emb_buy) + self.W_graph_para_2_1(valid_labels_emb_graph_attribute))
+        # valid_labels_emb = valid_labels_gate * valid_labels_emb_buy + (1. - valid_labels_gate) * valid_labels_emb_graph_attribute
+        # valid_labels_emb = torch.cat((valid_labels_emb_buy, valid_labels_emb_graph_attribute), dim=-1)
 
         # valid_labels_emb = valid_labels_emb_buy + valid_labels_emb_review
         # valid_labels_emb = valid_labels_emb_buy
         
         valid_negative_labels_emb_graph_1 = self.item_rep_graph_buy[valid_negative_labels, :]  # M x H
-        valid_negative_labels_emb_graph_2 = self.item_rep_graph_buy[valid_negative_labels, :]  # M x H
+        valid_negative_labels_emb_graph_2 = self.user_rep_graph_buy[valid_negative_labels, :]  # M x H
         valid_negative_labels_gate = torch.sigmoid(self.W_graph_para_1(valid_negative_labels_emb_graph_1) + self.W_graph_para_2(valid_negative_labels_emb_graph_2))
         valid_negative_labels_emb_buy = valid_negative_labels_gate * valid_negative_labels_emb_graph_1 + (1. - valid_negative_labels_gate) * valid_negative_labels_emb_graph_2
         # valid_negative_labels_emb = self.item_rep_graph[valid_negative_labels, :]  # M x H
         
         valid_negative_labels_emb_graph_attribute = self.user_rep_graph_attribute[valid_negative_labels, :]  # M x H
+        
+        if self.args.merge_type == "gate":
+            candidate_embeddings_gate = torch.sigmoid(self.W_graph_para_1_1(valid_negative_labels_emb_buy) + self.W_graph_para_2_1(valid_negative_labels_emb_graph_attribute))
+            valid_negative_labels_emb = valid_negative_labels_emb_buy * candidate_embeddings_gate + (1. - candidate_embeddings_gate) * valid_negative_labels_emb_graph_attribute
+        elif self.args.merge_type == "rm_kgat":
+            valid_negative_labels_emb = valid_negative_labels_emb_buy
+        elif self.args.merge_type == "rm_lightgcn":
+            valid_negative_labels_emb = valid_negative_labels_emb_graph_attribute
+        elif self.args.merge_type == "concat":
+            valid_negative_labels_emb = torch.cat((valid_negative_labels_emb_buy, valid_negative_labels_emb_graph_attribute), dim=-1)
+        elif self.args.merge_type == "attention":
+            seq_1 = self.W1_para_1(torch.tanh(self.W_graph_para_1_1(valid_negative_labels_emb_graph_1)))#(bs, sl, 1)
+            seq_2 = self.W1_para_2(torch.tanh(self.W_graph_para_2_1(valid_negative_labels_emb_graph_2))) #(bs, sl, 1)
+            seq_3 = self.W1_para_3(torch.tanh(self.W_graph_para_3_1(valid_negative_labels_emb_graph_attribute))) #(bs, sl, 1)
+            seq_merge = torch.cat([seq_1, seq_2, seq_3], dim=-1)
+            seq_merge_weight = nn.functional.softmax(seq_merge, dim=-1) #(bs, sl, 3)
+            seq_merge_tensor = torch.cat([torch.unsqueeze(valid_negative_labels_emb_graph_1, dim=-2), torch.unsqueeze(valid_negative_labels_emb_graph_2, dim=-2), torch.unsqueeze(valid_negative_labels_emb_graph_attribute, dim=-2)], dim=-2) #(bs, sl, 3, dim)
+            valid_negative_labels_emb = (seq_merge_tensor * torch.unsqueeze(seq_merge_weight, dim=-1)).sum(-2) #(bs, sl, dim)
+        
         # valid_negative_labels_emb_graph_2 = self.item_rep_graph_view[valid_negative_labels, :]  # M x H
-        valid_negative_labels_gate = torch.sigmoid(self.W_graph_para_1_1(valid_negative_labels_emb_buy) + self.W_graph_para_2_1(valid_negative_labels_emb_graph_attribute))
-        valid_negative_labels_emb = valid_negative_labels_gate * valid_negative_labels_emb_buy + (1. - valid_negative_labels_gate) * valid_negative_labels_emb_graph_attribute
+        # valid_negative_labels_gate = torch.sigmoid(self.W_graph_para_1_1(valid_negative_labels_emb_buy) + self.W_graph_para_2_1(valid_negative_labels_emb_graph_attribute))
+        # valid_negative_labels_emb = valid_negative_labels_gate * valid_negative_labels_emb_buy + (1. - valid_negative_labels_gate) * valid_negative_labels_emb_graph_attribute
+        # valid_negative_labels_emb = torch.cat((valid_negative_labels_emb_buy, valid_negative_labels_emb_graph_attribute), dim=-1)
 
         # valid_negative_labels_emb = valid_negative_labels_emb_buy + valid_negative_labels_emb_review
         # valid_negative_labels_emb = valid_negative_labels_emb_buy

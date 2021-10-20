@@ -114,6 +114,61 @@ class timer:
         else:
             self.tape.append(timer.time() - self.start)
 
+
+def UniformSample_original_v2(dataset, rel_type=None):
+    """
+    the original impliment of BPR Sampling in LightGCN
+    :return:
+        np.array: (trainDataSize, 3), each element is <user, positem, negitem>
+    The parameter 'dataset' is from ./dataloaders/graph.py, class Loader;
+    """
+    # pdb.set_trace()
+    total_start = time()
+    # dataset : BasicDataset
+    print("trainData: ", dataset.trainDataSize)
+    print("allPos: ", len(dataset.allPos))
+    user_num = dataset.trainDataSize
+    users = np.random.randint(0, dataset.n_users, user_num)
+    if rel_type == None:
+        allPos = dataset.allPos
+        allNeg = dataset.allNeg
+    # pdb.set_trace()
+    S = []
+    sample_time1 = 0.
+    sample_time2 = 0.
+    
+    for i, user in enumerate(users): 
+        start = time() 
+        # all_voc = [index for index in range(dataset.m_items)]
+        posForUser = allPos[user]
+        negForUser = allNeg[user]
+        if len(posForUser) == 0:
+            continue
+        sample_time2 += time() - start
+        posindex = np.random.randint(0, len(posForUser))
+        positem = posForUser[posindex]
+
+        #删除正样本
+        # negativeItems = list(set(all_voc) - set(posForUser))
+        # print("posForUser:", len(posForUser), dataset.m_items)
+
+        negindex = np.random.randint(0, len(negForUser))
+        negitem = negForUser[negindex]
+
+        # while True:
+        #     negitem = np.random.randint(0, dataset.m_items)
+        #     if negitem in posForUser:
+        #         continue
+        #     else:
+        #         break
+        S.append([user, positem, negitem]) #<user, positem, negitem>, 1:1:1
+        end = time()
+        sample_time1 += end - start
+        # print("{}/{}".format(i, len(users)))
+    total = time() - total_start
+    print("sample time:", total)
+    return np.array(S)
+
 def UniformSample_original(dataset, rel_type=None):
     """
     the original impliment of BPR Sampling in LightGCN
@@ -121,8 +176,11 @@ def UniformSample_original(dataset, rel_type=None):
         np.array: (trainDataSize, 3), each element is <user, positem, negitem>
     The parameter 'dataset' is from ./dataloaders/graph.py, class Loader;
     """
+    # pdb.set_trace()
     total_start = time()
     # dataset : BasicDataset
+    print("trainData: ", dataset.trainDataSize)
+    print("allPos: ", len(dataset.allPos))
     user_num = dataset.trainDataSize
     users = np.random.randint(0, dataset.n_users, user_num)
     if rel_type == None:
@@ -131,14 +189,22 @@ def UniformSample_original(dataset, rel_type=None):
     S = []
     sample_time1 = 0.
     sample_time2 = 0.
-    for i, user in enumerate(users):
-        start = time()
+    
+    for i, user in enumerate(users): 
+        start = time() 
+        # all_voc = [index for index in range(dataset.m_items)]
         posForUser = allPos[user]
         if len(posForUser) == 0:
             continue
         sample_time2 += time() - start
         posindex = np.random.randint(0, len(posForUser))
         positem = posForUser[posindex]
+
+        #删除正样本
+        # negativeItems = list(set(all_voc) - set(posForUser))
+        # print("posForUser:", len(posForUser), dataset.m_items)
+
+        # negitem = np.random.randint(0, dataset.m_items)
         while True:
             negitem = np.random.randint(0, dataset.m_items)
             if negitem in posForUser:
@@ -148,7 +214,9 @@ def UniformSample_original(dataset, rel_type=None):
         S.append([user, positem, negitem]) #<user, positem, negitem>, 1:1:1
         end = time()
         sample_time1 += end - start
+        # print("{}/{}".format(i, len(users)))
     total = time() - total_start
+    print("sample time:", total)
     return np.array(S)
 
 def sample_pos_triples_for_h(kg_dict, head, n_sample_pos_triples):

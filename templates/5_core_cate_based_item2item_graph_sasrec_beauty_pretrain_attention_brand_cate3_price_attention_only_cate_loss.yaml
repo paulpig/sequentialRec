@@ -28,13 +28,13 @@ train_negative_sampler_code: random #随机采样labels, sasrec的负样本从�
 # train_negative_sampler_code: popular #随机采样labels, sasrec的负样本从中构建;
 train_negative_sample_size: 1000 #sasrec负样本中1000中随机筛选一个;
 # train_negative_sampling_seed: 12345
-train_negative_sampling_seed: 42
+train_negative_sampling_seed: 46
 # test_negative_sampler_code: popular
 test_negative_sampler_code: random
 test_negative_sample_size: 100
 # test_negative_sampling_seed: 98765
 test_negative_sampling_seed: 42
-trainer_code: graph_sasrec_improve
+trainer_code: graph_sasrec_improve_add_cate_brand_price_multi_attention
 device: cuda
 # use_parallel: true
 use_parallel: false
@@ -62,7 +62,8 @@ saturation_wait_epochs: 20
 # saturation_wait_epochs: 10
 # model_code: sas
 # model_code: sas_finetune
-model_code: sas_finetune_graph_improve_ablation_both_item_user
+# model_code: sas_finetune_graph_improve_ablation_both_item_user_add_cate_brand
+model_code: sas_finetune_graph_improve_ablation_both_item_user_add_cate_brand_price_mulit_attention
 # model_init_seed: 0
 model_init_seed: 42
 model_init_range: 0.02
@@ -93,7 +94,10 @@ experiment_group: test
 # experiment_name: sas_v2
 # experiment_name: bert_beauty_bert_baseline_argument_occurrence_graph_improve_add_pretrain
 # experiment_name: bert_beauty_bert_baseline_argument_occurrence_graph_improve_add_pretrain_ablation
-experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_graph_finetune_sasrec_both_user_and_item_v3
+# experiment_name: 5_core_both_view_buy_graph_sasrec_food_pretrain_graph_finetune_sasrec_both_user_and_item_pretrain_epoch_40
+# experiment_name: 5_core_cate_based_item2item_graph_sasrec_beauty_pretrain_graph_finetune_sasrec_both_user_and_item_pretrain_epoch_20_cate_epoch_5_pretrain_both_buy_and_cate_brand_gate_merge_target_concat
+# experiment_name: 5_core_cate_based_item2item_graph_sasrec_beauty_pretrain_brand_price_cate4_multi_attention_out_attention
+experiment_name: 5_core_cate_based_item2item_graph_sasrec_beauty_pretrain_brand_price_cate4_multi_attention_out_attention_test
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_graph_finetune_sasrec
 # experiment_name: 5_core_both_view_buy_no_pretrain_graph_finetune_sasrec_bot
 # experiment_name: bert_beauty_bert_baseline_argument_test_v6
@@ -110,6 +114,11 @@ finetune_flag: false
 resume_training: false
 graph_path: /pub/data/kyyx/wbc/MEANTIME/Data/beauty/
 graph_filename: 5_core_beauty_rm_2_low_items_graph_both_view_buy.txt
+# graph_filename: 5_core_beauty_rm_5_low_items_item2item_cate_5_based_graph_add_brand.txt
+# graph_filename_cate3: beauty_cate3_based_item2item.txt
+graph_filename_cate3: beauty_cate4_based_item2item.txt
+graph_filename_brand: beauty_brand_based_item2item.txt
+graph_filename_price: beauty_price_based_item2item.txt
 latent_dim_rec: 64
 lightGCN_n_layers: 2
 keep_prob: 0.5
@@ -121,8 +130,11 @@ pooling_type: None
 # graph_epochs: 10
 # graph_epochs: 20
 # graph_epochs: 20
-# graph_epochs: 40
+# graph_epochs: 20
+# graph_epochs: 20
 graph_epochs: 20
+# graph_cate_epochs: 5
+graph_cate_epochs: 5
 # graph_epochs: 1
 bpr_batch_size: 2048
 add_graph_flag: true

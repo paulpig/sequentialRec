@@ -1,8 +1,8 @@
 from meantime.dataloaders import graph
 from ..base import BaseModel
 from .embeddings import *
-# from .bodies import ExactSasBody
-from .bodies import SasBody
+from .bodies import ExactSasBody
+# from .bodies import SasBody
 from .heads import *
 
 
@@ -15,9 +15,11 @@ class SASModel(BaseModel):
         super().__init__(args)
         self.output_info = args.output_info
         self.token_embedding = TokenEmbedding(args)
-        self.positional_embedding = PositionalEmbedding(args)
-        self.body = SasBody(args) #hidden_size = hidden_size * 2
-        self.ln = nn.LayerNorm(args.hidden_units)
+        # self.positional_embedding = PositionalEmbedding(args)
+        self.positional_embedding = PositionalEmbeddingDirect(args) #(bs, 2*hidden_unit)
+        self.body = ExactSasBody(args) #hidden_size = hidden_size * 2
+        # self.ln = nn.LayerNorm(args.hidden_units)
+        self.ln = nn.LayerNorm(args.hidden_units * 2)
         self.dropout = nn.Dropout(p=args.dropout)
 
         # self.gru = nn.GRU(self.args.hidden_units * 2, self.args.hidden_units, self.args.gru_layer_number, dropout=self.args.dropout, batch_first=True)
@@ -45,7 +47,7 @@ class SASModel(BaseModel):
 
     @classmethod
     def code(cls):
-        return 'sas_finetune_graph_improve_ablation_both_item_user'
+        return 'sas_finetune_graph_improve_ablation_both_item_user_add_cate_brand_price_mulit_attention'
 
 
 
@@ -55,10 +57,13 @@ class SASModel(BaseModel):
 
         self.W_graph_para_1 = nn.Linear(self.args.hidden_units, self.args.hidden_units).cuda()
         self.W_graph_para_2 = nn.Linear(self.args.hidden_units, self.args.hidden_units).cuda()
+
+        self.W_graph_para_1_cate = nn.Linear(self.args.hidden_units, self.args.hidden_units).cuda()
+        self.W_graph_para_2_cate = nn.Linear(self.args.hidden_units, self.args.hidden_units).cuda()
         return
 
     
-    def setUserItemRepFromGraph(self, user_rep_graph, item_rep_graph):
+    def setUserItemRepFromGraph(self, user_rep_graph, item_rep_graph, user_rep_cate_brand, item_rep_cate_brand):
         """
         The representations from the LightGCN model; 
         user_rep_graph: (|users|, dim)
@@ -67,7 +72,8 @@ class SASModel(BaseModel):
         self.user_rep_graph = user_rep_graph
         self.item_rep_graph = item_rep_graph
 
-        # pdb.set_trace()
+        self.user_rep_cate_brand = user_rep_cate_brand #由于是对称矩阵, 因此入度与出度表征相似，没有学到额外信息;
+        self.item_rep_cate_brand = item_rep_cate_brand
         return
     
 
@@ -94,9 +100,17 @@ class SASModel(BaseModel):
             x_unsqueeenze = x.reshape(-1) #(bs*C)
             candidate_embeddings_graph_1 = self.item_rep_graph[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
             candidate_embeddings_graph_2 = self.user_rep_graph[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
+            candidate_embeddings_graph_cate = self.user_rep_cate_brand[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
+            
             candidate_embeddings_gate = torch.sigmoid(self.W_graph_para_1(candidate_embeddings_graph_1) + self.W_graph_para_2(candidate_embeddings_graph_2))
             # gate = torch.sigmoid(self.W1_para(candidate_embeddings_bert) + self.W2_para(candidate_embeddings_graph))
             candidate_embeddings = candidate_embeddings_gate * candidate_embeddings_graph_1 + (1. - candidate_embeddings_gate) * candidate_embeddings_graph_2
+            
+            #融合cate和brand特征
+            # candidate_embeddings_cate_gate = torch.sigmoid(self.W_graph_para_1_cate(candidate_embeddings) + self.W_graph_para_2_cate(candidate_embeddings_graph_cate))
+            # candidate_embeddings = candidate_embeddings_cate_gate * candidate_embeddings + (1. - candidate_embeddings_cate_gate) * candidate_embeddings_graph_cate
+            candidate_embeddings = torch.cat((candidate_embeddings, candidate_embeddings_graph_cate), -1)
+
             scores = (last_logits * candidate_embeddings).sum(-1)  # B x C
             ret['scores'] = scores
         return ret
@@ -119,9 +133,21 @@ class SASModel(BaseModel):
         # graph_e = self.item_rep_graph[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1) #(bs, sl, dim) #use the hidden representation to init the embedding lookup table;
         candidate_embeddings_graph_1 = self.item_rep_graph[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
         candidate_embeddings_graph_2 = self.user_rep_graph[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
+        candidate_embeddings_graph_cate = self.user_rep_cate_brand[x_unsqueeenze, :].reshape(x.size(0), x.size(1), -1)
+
         candidate_embeddings_gate = torch.sigmoid(self.W_graph_para_1(candidate_embeddings_graph_1) + self.W_graph_para_2(candidate_embeddings_graph_2))
         # gate = torch.sigmoid(self.W1_para(candidate_embeddings_bert) + self.W2_para(candidate_embeddings_graph))
         graph_e = candidate_embeddings_gate * candidate_embeddings_graph_1 + (1. - candidate_embeddings_gate) * candidate_embeddings_graph_2
+        
+        #添加cate和brand特征
+        # candidate_embeddings_cate_gate = torch.sigmoid(self.W_graph_para_1_cate(graph_e) + self.W_graph_para_2_cate(candidate_embeddings_graph_cate))
+        # graph_e = candidate_embeddings_cate_gate * graph_e + (1. - candidate_embeddings_cate_gate) * candidate_embeddings_graph_cate
+        # graph_e = graph_e + candidate_embeddings_graph_cate
+        # graph_e = graph_e + self.positional_embedding(d)
+
+        graph_e = torch.cat((graph_e, candidate_embeddings_graph_cate), -1)
+
+        # pdb.set_trace()
         e = graph_e + self.positional_embedding(d)
 
         #concat the representation from the graph and the init item embedding;
@@ -168,15 +194,30 @@ class SASModel(BaseModel):
 
         valid_labels_emb_graph_1 = self.item_rep_graph[valid_labels, :]  # M x H
         valid_labels_emb_graph_2 = self.user_rep_graph[valid_labels, :]  # M x H
+        valid_labels_emb_graph_cate = self.user_rep_cate_brand[valid_labels, :]
+
         valid_labels_gate = torch.sigmoid(self.W_graph_para_1(valid_labels_emb_graph_1) + self.W_graph_para_2(valid_labels_emb_graph_2))
         valid_labels_emb = valid_labels_gate * valid_labels_emb_graph_1 + (1. - valid_labels_gate) * valid_labels_emb_graph_2
-        
+        #添加cate和brand
+        # candidate_embeddings_cate_gate = torch.sigmoid(self.W_graph_para_1_cate(valid_labels_emb) + self.W_graph_para_2_cate(valid_labels_emb_graph_cate))
+        # valid_labels_emb = candidate_embeddings_cate_gate * valid_labels_emb + (1. - candidate_embeddings_cate_gate) * valid_labels_emb_graph_cate
+        # valid_labels_emb = valid_labels_emb + valid_labels_emb_graph_cate
+        valid_labels_emb = torch.cat((valid_labels_emb, valid_labels_emb_graph_cate), -1)
+
         valid_negative_labels_emb_graph_1 = self.item_rep_graph[valid_negative_labels, :]  # M x H
         valid_negative_labels_emb_graph_2 = self.user_rep_graph[valid_negative_labels, :]  # M x H
+        valid_negative_labels_emb_graph_cate = self.user_rep_cate_brand[valid_negative_labels, :]
+
         valid_negative_labels_gate = torch.sigmoid(self.W_graph_para_1(valid_negative_labels_emb_graph_1) + self.W_graph_para_2(valid_negative_labels_emb_graph_2))
         valid_negative_labels_emb = valid_negative_labels_gate * valid_negative_labels_emb_graph_1 + (1. - valid_negative_labels_gate) * valid_negative_labels_emb_graph_2
         # valid_negative_labels_emb = self.item_rep_graph[valid_negative_labels, :]  # M x H
-        
+        #添加cate和brand
+        # candidate_embeddings_cate_gate = torch.sigmoid(self.W_graph_para_1_cate(valid_negative_labels_emb) + self.W_graph_para_2_cate(valid_negative_labels_emb_graph_cate))
+        # valid_negative_labels_emb = candidate_embeddings_cate_gate * valid_negative_labels_emb + (1. - candidate_embeddings_cate_gate) * valid_negative_labels_emb_graph_cate
+        # valid_negative_labels_emb = valid_negative_labels_emb + valid_negative_labels_emb_graph_cate
+        valid_negative_labels_emb = torch.cat((valid_negative_labels_emb, valid_negative_labels_emb_graph_cate), -1)
+
+
         valid_labels_prob = self.sigmoid((valid_logits * valid_labels_emb).sum(-1))  # M
         valid_negative_labels_prob = self.sigmoid((valid_logits * valid_negative_labels_emb).sum(-1))  # M
 

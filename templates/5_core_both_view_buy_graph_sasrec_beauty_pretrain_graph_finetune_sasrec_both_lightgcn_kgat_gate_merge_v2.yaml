@@ -34,7 +34,7 @@ test_negative_sampler_code: random
 test_negative_sample_size: 100
 # test_negative_sampling_seed: 98765
 test_negative_sampling_seed: 42
-trainer_code: graph_sasrec_improve
+trainer_code: graph_sasrec_improve_lightgcn_kgat
 device: cuda
 # use_parallel: true
 use_parallel: false
@@ -62,13 +62,15 @@ saturation_wait_epochs: 20
 # saturation_wait_epochs: 10
 # model_code: sas
 # model_code: sas_finetune
-model_code: sas_finetune_graph_improve_ablation_both_item_user
+# model_code: sas_finetune_graph_improve_ablation_both_item_user
+model_code: graph_sasrec_improve_lightgcn_kgat
 # model_init_seed: 0
 model_init_seed: 42
 model_init_range: 0.02
 # max_len: 200
 max_len: 50
-hidden_units: 64
+# hidden_units: 64
+hidden_units: 128
 num_blocks: 2
 num_heads: 2
 # num_heads: 4
@@ -93,12 +95,18 @@ experiment_group: test
 # experiment_name: sas_v2
 # experiment_name: bert_beauty_bert_baseline_argument_occurrence_graph_improve_add_pretrain
 # experiment_name: bert_beauty_bert_baseline_argument_occurrence_graph_improve_add_pretrain_ablation
-experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_graph_finetune_sasrec_both_user_and_item_v3
+# experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_merge_rm_kgat
+# experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_merge_v3
+# experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_merge_rm_kgat
+# experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_merge_rm_lightgcn
+# experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_concat
+experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_concat_20_20_v7_hidden
+# experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_concat_20_100
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_graph_finetune_sasrec
 # experiment_name: 5_core_both_view_buy_no_pretrain_graph_finetune_sasrec_bot
 # experiment_name: bert_beauty_bert_baseline_argument_test_v6
 # experiment_name: bert_beauty_bert_baseline_argument
-# experiment_name: bert_beauty_pretrain_random_100 #bert预训练好的模型,加载后finetune;
+# experiment_name: bert_beauty_pretrain_random_100 #bert预训练好的模型,加载后finetune;ddddd
 wandb_project_name: null
 wandb_run_name: null
 wandb_run_id: null
@@ -109,23 +117,32 @@ meta: training
 finetune_flag: false
 resume_training: false
 graph_path: /pub/data/kyyx/wbc/MEANTIME/Data/beauty/
+# graph_filename: 5_core_beauty_rm_2_low_items_graph_both_view_buy.txt
+graph_filename_kgat: beauty_item_attribute_triple.txt
 graph_filename: 5_core_beauty_rm_2_low_items_graph_both_view_buy.txt
 latent_dim_rec: 64
+# latent_dim_rec: 128
 lightGCN_n_layers: 2
 keep_prob: 0.5
 A_split: false
 graph_pretrain: false
 graph_dropout: false
 pooling_type: None
-# graph_epochs: 8
-# graph_epochs: 10
-# graph_epochs: 20
-# graph_epochs: 20
-# graph_epochs: 40
 graph_epochs: 20
+graph_attribute_epochs: 20
 # graph_epochs: 1
 bpr_batch_size: 2048
 add_graph_flag: true
 gru_layer_number: 2
 add_cate_flag: false
+kg_l2loss_lambda: 0.0
 rm_self_node: false
+# merge_type: rm_kgat
+# merge_type: rm_lightgcn
+# merge_type: gate
+merge_type: concat
+# merge_type: attention
+# kgat_merge: lightgcn
+kgat_merge: bilinear
+# kgat_output: emb
+kgat_output: hidden

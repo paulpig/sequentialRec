@@ -8,14 +8,14 @@ from meantime.dataloaders import get_dataloader
 from .utils import recalls_and_ndcgs_for_ks
 
 from .base import AbstractTrainer
-from meantime.trainers.utils import UniformSample_original, timer, minibatch, shuffle, UniformSample_original_KGE
+from meantime.trainers.utils import UniformSample_original, UniformSample_original_v2, timer, minibatch, shuffle
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
 import pandas as pd
 from meantime.models.transformer_models.lightGCN import LightGCN
-from meantime.models.transformer_models.GraphGAT import KGAT
+from meantime.models.transformer_models.lightGCNAttention import LightGCNAttention
 
 from abc import *
 from pathlib import Path
@@ -23,8 +23,7 @@ import os
 import pdb
 from meantime.dataloaders.graph import GraphLoader
 # from meantime.dataloaders.graph_cate_brand import GraphLoaderCateBrand
-from meantime.dataloaders.graphGAT import GraphLoader as GATLoader
-# from meantime.dataloaders.graphGAT 
+from meantime.dataloaders.graph_cate3_price_brand_attention import GraphAttentionLoader
 
 class GraphTrainer(AbstractTrainer):
     def __init__(self, args, model, train_loader, val_loader, test_loader, local_export_root):
@@ -37,7 +36,6 @@ class GraphTrainer(AbstractTrainer):
         self.device = args.device
         self.model = model.to(self.device)
 
-        self.kg_l2loss_lambda = self.args.kg_l2loss_lambda
         #graph-based model and loader;
         # if graph_loader != None and graph_model != None:
             # self.graph_loader = graph_loader
@@ -49,18 +47,16 @@ class GraphTrainer(AbstractTrainer):
         item2id = dataset['smap']
         self.graph_loader = GraphLoader(self.args, user2id, item2id)
         #add cate
-        # self.graph_loader_cate = GraphLoaderCateBrand(self.args, user2id, item2id)
-        self.graph_loader_kgat = GATLoader(self.args, user2id, item2id)
+        self.graph_loader_cate = GraphAttentionLoader(self.args, user2id, item2id)
         
         # pdb.set_trace()
         # self.graph_model = graph_model
         self.graph_model = LightGCN(self.args, self.graph_loader).to(self.device)
         #add cate
-        self.graph_model_kgat = KGAT(self.args, self.graph_loader_kgat).to(self.device)
+        self.graph_model_cate = LightGCNAttention(self.args, self.graph_loader_cate).to(self.device)
 
         self.graph_epochs = args.graph_epochs
-        # self.graph_cate_epochs = args.graph_cate_epochs
-        self.graph_attribute_epochs = args.graph_attribute_epochs
+        self.graph_cate_epochs = args.graph_cate_epochs
         # self.graph_optimizer = self._create_graph_optimizer() #创建图模型优化器;
         
         self.use_parallel = args.use_parallel
@@ -110,8 +106,7 @@ class GraphTrainer(AbstractTrainer):
 
     @classmethod
     def code(cls):
-        # return 'graph_sasrec_improve_add_cate_brand'
-        return 'graph_sasrec_improve_lightgcn_kgat'
+        return 'graph_sasrec_improve_add_cate_brand_price_multi_attention'
 
     def add_extra_loggers(self):
         pass
@@ -139,10 +134,14 @@ class GraphTrainer(AbstractTrainer):
         metrics = recalls_and_ndcgs_for_ks(scores, labels, self.metric_ks)
         return metrics
 
-    def trainGraphModelOneEpochKGAT(self, optim_graph):
+    
+    def trainGraphModelOneEpochCate(self, optim_graph):
+        """
+        训练基于cate的图模型;
+        """
         # Recmodel = self.graph_model
         # Recmodel.train()
-        self.graph_model_kgat.train()
+        self.graph_model_cate.train()
         # bpr: utils.BPRLoss = loss_class
 
         # self.weight_decay = config['decay']
@@ -150,32 +149,29 @@ class GraphTrainer(AbstractTrainer):
         # self.lr = config['lr']
         
         with timer(name="Sample"):
-            # S = UniformSample_original(self.graph_loader_kgat)
-            S = UniformSample_original_KGE(self.graph_loader_kgat)
-            
+            # S = UniformSample_original_v2(self.graph_loader_cate)
+            S = UniformSample_original(self.graph_loader)
+        print("loading UniformSample_original finish!!")
+
         users = torch.Tensor(S[:, 0]).long()
-        rels = torch.Tensor(S[:, 1]).long() #(len(train_items))
-        posItems = torch.Tensor(S[:, 2]).long()
-        negItems = torch.Tensor(S[:, 3]).long() #(len(train_items))
-        
+        posItems = torch.Tensor(S[:, 1]).long()
+        negItems = torch.Tensor(S[:, 2]).long() #(len(train_items))
 
         users = users.to(self.args.device)
-        rels = rels.to(self.args.device)
         posItems = posItems.to(self.args.device)
         negItems = negItems.to(self.args.device)
-        users, rels, posItems, negItems = shuffle(users, rels, posItems, negItems)
+        users, posItems, negItems = shuffle(users, posItems, negItems)
         # total_batch = len(users) // world.config['bpr_batch_size'] + 1
         total_batch = len(users) // self.args.bpr_batch_size + 1
         aver_loss = 0.
         # pdb.set_trace()
         for (batch_i,
             (batch_users,
-            batch_rels,
             batch_pos,
-            batch_neg)) in enumerate(minibatch(users, rels, posItems, negItems, batch_size=self.args.bpr_batch_size)):
+            batch_neg)) in enumerate(minibatch(users, posItems, negItems, batch_size=self.args.bpr_batch_size)):
             # cri = bpr.stageOne(batch_users, batch_pos, batch_neg)
             # loss, reg_loss = self.model.bpr_loss(batch_users, batch_pos, batch_neg)
-            loss, reg_loss = self.graph_model_kgat.bpr_loss(batch_users, batch_pos, batch_neg, batch_rels)
+            loss, reg_loss = self.graph_model_cate.bpr_loss(batch_users, batch_pos, batch_neg)
             reg_loss = reg_loss*self.weight_decay
             loss = loss + reg_loss
 
@@ -189,108 +185,7 @@ class GraphTrainer(AbstractTrainer):
         aver_loss = aver_loss / total_batch
         time_info = timer.dict()
         timer.zero()
-
-        # add the KGE loss and update the adjacent matrix (TO DO)
-        optim_graph_kge = optim_graph #同一个optim;
-
-        with timer(name="SampleKGE"):
-            S = UniformSample_original_KGE(self.graph_loader_kgat) #return <centor_node, rel, posItems, negItems>
-        users = torch.Tensor(S[:, 0]).long()
-        rels = torch.Tensor(S[:, 1]).long()
-        posItems = torch.Tensor(S[:, 2]).long()
-        negItems = torch.Tensor(S[:, 3]).long() #(len(train_items))
-
-        # pdb.set_trace()
-        users = users.to(dtype=torch.long, device=self.args.device)
-        rels = rels.to(dtype=torch.long, device=self.args.device)
-        posItems = posItems.to(dtype=torch.long, device=self.args.device)
-        negItems = negItems.to(dtype=torch.long, device=self.args.device)
-
-        users, rels, posItems, negItems = shuffle(users, rels, posItems, negItems)
-        # total_batch = len(users) // world.config['bpr_batch_size'] + 1
-        total_batch = len(users) // self.args.bpr_batch_size + 1
-        tranR_aver_loss = 0.
-        # pdb.set_trace()
-        for (batch_i,
-            (batch_users,
-            batch_rels,
-            batch_pos,
-            batch_neg)) in enumerate(minibatch(users, rels, posItems, negItems, batch_size=self.args.bpr_batch_size)):
-
-            tranR_loss, reg_loss = self.graph_model_kgat.tranR_loss(batch_users, batch_rels, batch_pos, batch_neg)
-            
-            # reg_loss = reg_loss*self.kg_l2loss_lambda
-            reg_loss = reg_loss*self.weight_decay
-            tranR_loss = tranR_loss + reg_loss
-
-            optim_graph_kge.zero_grad()
-            tranR_loss.backward(retain_graph=True)
-            optim_graph_kge.step()
-            cri = tranR_loss.cpu().item()
-            tranR_aver_loss += cri
-            # if world.tensorboard:
-            #     w.add_scalar(f'BPRLoss/BPR', cri, epoch * int(len(users) / world.config['bpr_batch_size']) + batch_i)
-        tranR_aver_loss = tranR_aver_loss / total_batch
-        tranR_time_info = timer.dict()
-        timer.zero()
-
-        # updating attention scores
-        with torch.no_grad():
-            # pdb.set_trace()
-            att = self.graph_model_kgat.updateAttentionScore()
-            self.graph_model_kgat.Graph = att
-
-        return f"loss{aver_loss:.3f}-{time_info}" + "----------" + f"loss{tranR_aver_loss:.3f}-{tranR_time_info}"
-    
-
-    # def trainGraphModelOneEpochCate(self, optim_graph):
-    #     """
-    #     训练基于cate的图模型;
-    #     """
-    #     # Recmodel = self.graph_model
-    #     # Recmodel.train()
-    #     self.graph_model_cate.train()
-    #     # bpr: utils.BPRLoss = loss_class
-
-    #     # self.weight_decay = config['decay']
-    #     self.weight_decay = self.args.weight_decay
-    #     # self.lr = config['lr']
-        
-    #     with timer(name="Sample"):
-    #         S = UniformSample_original(self.graph_loader_cate)
-    #     users = torch.Tensor(S[:, 0]).long()
-    #     posItems = torch.Tensor(S[:, 1]).long()
-    #     negItems = torch.Tensor(S[:, 2]).long() #(len(train_items))
-
-    #     users = users.to(self.args.device)
-    #     posItems = posItems.to(self.args.device)
-    #     negItems = negItems.to(self.args.device)
-    #     users, posItems, negItems = shuffle(users, posItems, negItems)
-    #     # total_batch = len(users) // world.config['bpr_batch_size'] + 1
-    #     total_batch = len(users) // self.args.bpr_batch_size + 1
-    #     aver_loss = 0.
-    #     # pdb.set_trace()
-    #     for (batch_i,
-    #         (batch_users,
-    #         batch_pos,
-    #         batch_neg)) in enumerate(minibatch(users, posItems, negItems, batch_size=self.args.bpr_batch_size)):
-    #         # cri = bpr.stageOne(batch_users, batch_pos, batch_neg)
-    #         # loss, reg_loss = self.model.bpr_loss(batch_users, batch_pos, batch_neg)
-    #         loss, reg_loss = self.graph_model_cate.bpr_loss(batch_users, batch_pos, batch_neg)
-    #         reg_loss = reg_loss*self.weight_decay
-    #         loss = loss + reg_loss
-
-    #         optim_graph.zero_grad()
-    #         loss.backward(retain_graph=True)
-    #         optim_graph.step()
-    #         cri = loss.cpu().item()
-    #         aver_loss += cri
-    #         # if world.tensorboard:
-    #         #     w.add_scalar(f'BPRLoss/BPR', cri, epoch * int(len(users) / world.config['bpr_batch_size']) + batch_i)
-    #     aver_loss = aver_loss / total_batch
-    #     time_info = timer.dict()
-    #     timer.zero()
-    #     return f"loss{aver_loss:.3f}-{time_info}"
+        return f"loss{aver_loss:.3f}-{time_info}"
 
 
     def trainGraphModelOneEpoch(self, optim_graph):
@@ -351,8 +246,7 @@ class GraphTrainer(AbstractTrainer):
         # add graph-based training
         self.lr = self.args.lr
         self.graph_opt = optim.Adam(self.graph_model.parameters(), lr=self.lr)
-        # self.graph_opt_cate = optim.Adam(self.graph_model_cate.parameters(), lr=self.lr)
-        self.graph_opt_attribute = optim.Adam(self.graph_model_kgat.parameters(), lr=self.lr)
+        self.graph_opt_cate = optim.Adam(self.graph_model_cate.parameters(), lr=self.lr)
 
         #预训练graph模型;
         for epoch in range(self.graph_epochs):
@@ -360,9 +254,8 @@ class GraphTrainer(AbstractTrainer):
             print("Both buy and view loss:", info_train_loss)
 
         #预预先cate_brand graph模型
-        for epoch in range(self.graph_attribute_epochs):
-            # info_train_loss = self.trainGraphModelOneEpochCate(self.graph_opt_cate)
-            info_train_loss = self.trainGraphModelOneEpochKGAT(self.graph_opt_attribute)
+        for epoch in range(self.graph_cate_epochs):
+            info_train_loss = self.trainGraphModelOneEpochCate(self.graph_opt_cate)
             print("cate_and_graph_loss:", info_train_loss)       
 
         print("Finish training the LightGCN model;")
@@ -373,8 +266,7 @@ class GraphTrainer(AbstractTrainer):
         #pdb.set_trace()
         #get user and item embeddings
         self.user_hidden_rep, self.item_hidden_rep = self.graph_model.getUserItemEmb()
-        # self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_cate.getUserItemEmb()
-        self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_kgat.getUserItemEmb()
+        self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_cate.getUserItemEmb()
 
         #setting representations to sequential models; 由于user embedding不参与模型, 两个输出的均是item表征;
         self.model.setUserItemRepFromGraph(self.user_hidden_rep, self.item_hidden_rep, self.user_hidden_rep_cate, self.item_hidden_rep_cate) #每次加载相同的hidden representatin, 不合理;
@@ -436,8 +328,7 @@ class GraphTrainer(AbstractTrainer):
     def train_one_epoch(self, epoch, accum_iter, train_loader, **kwargs):
         self.model.train()
         self.graph_model.train()
-        # self.graph_model_cate.train()
-        self.graph_model_kgat.train()
+        self.graph_model_cate.train()
 
         average_meter_set = AverageMeterSet()
         num_instance = 0
@@ -449,8 +340,7 @@ class GraphTrainer(AbstractTrainer):
                 
             #经过一次epoch, 重新获取item representation; 修改为每次batch就重新获取item representation;
             self.user_hidden_rep, self.item_hidden_rep = self.graph_model.getUserItemEmb()
-            # self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_cate.getUserItemEmb()
-            self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_kgat.getUserItemEmb()
+            self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_cate.getUserItemEmb()
             #setting representations to sequential models; 由于user embedding不参与模型, 两个输出的均是item表征;
             self.model.setUserItemRepFromGraph(self.user_hidden_rep, self.item_hidden_rep, self.user_hidden_rep_cate, self.item_hidden_rep_cate) #每次加载相同的hidden representatin, 不合理;
 
@@ -469,10 +359,7 @@ class GraphTrainer(AbstractTrainer):
 
             if self.clip_grad_norm is not None:
                 # torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip_grad_norm)
-                # torch.nn.utils.clip_grad_norm_(list(self.model.parameters()) + list(self.graph_model.parameters()) + list(self.graph_model_cate.parameters()), self.clip_grad_norm)
-                # torch.nn.utils.clip_grad_norm_(list(self.model.parameters()) + list(self.graph_model.parameters()) + list(self.graph_model_kgat.parameters()), self.clip_grad_norm)
-                torch.nn.utils.clip_grad_norm_(list(self.model.parameters()) + list(self.graph_model.parameters()), self.clip_grad_norm)
-            
+                torch.nn.utils.clip_grad_norm_(list(self.model.parameters()) + list(self.graph_model.parameters()) + list(self.graph_model_cate.parameters()), self.clip_grad_norm)
             
             # pdb.set_trace()
             # for name, parameters in self.graph_model.named_parameters():
@@ -527,8 +414,7 @@ class GraphTrainer(AbstractTrainer):
 
         self.model.eval()
         self.graph_model.eval()
-        # self.graph_model_cate.eval()
-        self.graph_model_kgat.eval()
+        self.graph_model_cate.eval()
 
         average_meter_set = AverageMeterSet()
         num_instance = 0
@@ -597,11 +483,9 @@ class GraphTrainer(AbstractTrainer):
         args = self.args
         if args.optimizer.lower() == 'adam':
             betas = (args.adam_beta1, args.adam_beta2)
-            # return optim.Adam(list(self.model.parameters()) + list(self.graph_model.parameters()) + list(self.graph_model_cate.parameters()), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
-            # return optim.Adam(list(self.model.parameters()) + list(self.graph_model.parameters()) + list(self.graph_model_kgat.parameters()), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
-            return optim.Adam(list(self.model.parameters()) + list(self.graph_model.parameters()), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
+            return optim.Adam(list(self.model.parameters()) + list(self.graph_model.parameters()) + list(self.graph_model_cate.parameters()), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
         elif args.optimizer.lower() == 'sgd':
-            return optim.SGD(list(self.model.parameters()) + list(self.graph_model.parameters()), lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
+            return optim.SGD(list(self.model.parameters()) + list(self.graph_model.parameters()) + list(self.graph_model_cate.parameters()), lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
         else:
             raise ValueError
     

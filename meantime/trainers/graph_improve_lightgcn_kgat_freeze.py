@@ -150,32 +150,26 @@ class GraphTrainer(AbstractTrainer):
         # self.lr = config['lr']
         
         with timer(name="Sample"):
-            # S = UniformSample_original(self.graph_loader_kgat)
-            S = UniformSample_original_KGE(self.graph_loader_kgat)
-            
+            S = UniformSample_original(self.graph_loader_kgat)
         users = torch.Tensor(S[:, 0]).long()
-        rels = torch.Tensor(S[:, 1]).long() #(len(train_items))
-        posItems = torch.Tensor(S[:, 2]).long()
-        negItems = torch.Tensor(S[:, 3]).long() #(len(train_items))
-        
+        posItems = torch.Tensor(S[:, 1]).long()
+        negItems = torch.Tensor(S[:, 2]).long() #(len(train_items))
 
         users = users.to(self.args.device)
-        rels = rels.to(self.args.device)
         posItems = posItems.to(self.args.device)
         negItems = negItems.to(self.args.device)
-        users, rels, posItems, negItems = shuffle(users, rels, posItems, negItems)
+        users, posItems, negItems = shuffle(users, posItems, negItems)
         # total_batch = len(users) // world.config['bpr_batch_size'] + 1
         total_batch = len(users) // self.args.bpr_batch_size + 1
         aver_loss = 0.
         # pdb.set_trace()
         for (batch_i,
             (batch_users,
-            batch_rels,
             batch_pos,
-            batch_neg)) in enumerate(minibatch(users, rels, posItems, negItems, batch_size=self.args.bpr_batch_size)):
+            batch_neg)) in enumerate(minibatch(users, posItems, negItems, batch_size=self.args.bpr_batch_size)):
             # cri = bpr.stageOne(batch_users, batch_pos, batch_neg)
             # loss, reg_loss = self.model.bpr_loss(batch_users, batch_pos, batch_neg)
-            loss, reg_loss = self.graph_model_kgat.bpr_loss(batch_users, batch_pos, batch_neg, batch_rels)
+            loss, reg_loss = self.graph_model_kgat.bpr_loss(batch_users, batch_pos, batch_neg)
             reg_loss = reg_loss*self.weight_decay
             loss = loss + reg_loss
 
@@ -470,9 +464,7 @@ class GraphTrainer(AbstractTrainer):
             if self.clip_grad_norm is not None:
                 # torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.clip_grad_norm)
                 # torch.nn.utils.clip_grad_norm_(list(self.model.parameters()) + list(self.graph_model.parameters()) + list(self.graph_model_cate.parameters()), self.clip_grad_norm)
-                # torch.nn.utils.clip_grad_norm_(list(self.model.parameters()) + list(self.graph_model.parameters()) + list(self.graph_model_kgat.parameters()), self.clip_grad_norm)
-                torch.nn.utils.clip_grad_norm_(list(self.model.parameters()) + list(self.graph_model.parameters()), self.clip_grad_norm)
-            
+                torch.nn.utils.clip_grad_norm_(list(self.model.parameters()) + list(self.graph_model.parameters()) + list(self.graph_model_kgat.parameters()), self.clip_grad_norm)
             
             # pdb.set_trace()
             # for name, parameters in self.graph_model.named_parameters():
@@ -598,10 +590,9 @@ class GraphTrainer(AbstractTrainer):
         if args.optimizer.lower() == 'adam':
             betas = (args.adam_beta1, args.adam_beta2)
             # return optim.Adam(list(self.model.parameters()) + list(self.graph_model.parameters()) + list(self.graph_model_cate.parameters()), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
-            # return optim.Adam(list(self.model.parameters()) + list(self.graph_model.parameters()) + list(self.graph_model_kgat.parameters()), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
-            return optim.Adam(list(self.model.parameters()) + list(self.graph_model.parameters()), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
+            return optim.Adam(list(self.model.parameters()) + list(self.graph_model.parameters()) + list(self.graph_model_kgat.parameters()), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
         elif args.optimizer.lower() == 'sgd':
-            return optim.SGD(list(self.model.parameters()) + list(self.graph_model.parameters()), lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
+            return optim.SGD(list(self.model.parameters()) + list(self.graph_model.parameters()) + list(self.graph_model_kgat.parameters()), lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
         else:
             raise ValueError
     
