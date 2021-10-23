@@ -84,8 +84,10 @@ class KGAT(BertBaseModel):
         self.all_tail_tensor = torch.Tensor(self.all_tail_list ).long().to(dtype=torch.long, device=self.config.device)
 
 
-        self.W_graph_para_1 = nn.Linear(self.latent_dim, self.latent_dim)
-        self.W_graph_para_2 = nn.Linear(self.latent_dim, self.latent_dim)
+        self.W_graph_para_1 = nn.ModuleList([nn.Linear(self.latent_dim, self.latent_dim) for _ in range(self.n_layers)])
+        self.W_graph_para_2 = nn.ModuleList([nn.Linear(self.latent_dim, self.latent_dim) for _ in range(self.n_layers)])
+        # self.W_graph_para_1 = nn.Linear(self.latent_dim, self.latent_dim)
+        # self.W_graph_para_2 = nn.Linear(self.latent_dim, self.latent_dim)
         # print(f"lgn is already to go(dropout:{self.config['dropout']})")
         print(f"lgn is already to go(dropout:{self.config.graph_dropout})")
 
@@ -153,9 +155,15 @@ class KGAT(BertBaseModel):
 
             
             if self.config.kgat_merge == "bilinear":
-                all_emb = F.leaky_relu(self.W_graph_para_1(all_emb_neighbor + all_emb)) + F.leaky_relu(self.W_graph_para_2(all_emb_neighbor * all_emb_neighbor))
+                all_emb = F.leaky_relu(self.W_graph_para_1[layer](all_emb_neighbor + all_emb)) + F.leaky_relu(self.W_graph_para_2[layer](all_emb_neighbor * all_emb_neighbor))
             elif self.config.kgat_merge == "lightgcn":
-                all_emb = all_emb_neighbor
+                all_emb = F.leaky_relu(self.W_graph_para_1[layer](all_emb_neighbor + all_emb))
+            elif self.config.kgat_merge == "add":
+                all_emb = all_emb_neighbor + all_emb
+            elif self.config.kgat_merge == "max":
+                all_emb = torch.cat([all_emb_neighbor.unsqueeze(-2), all_emb.unsqueeze(-2)], dim=-2).max(dim=-2).values
+            elif self.config.kgat_merge == "mean":
+                all_emb = torch.cat([all_emb_neighbor.unsqueeze(-2), all_emb.unsqueeze(-2)], dim=-2).mean(dim=-2)
 
             embs.append(all_emb)
 

@@ -170,7 +170,7 @@ class GraphTrainer(AbstractTrainer):
         aver_loss = aver_loss / total_batch
         time_info = timer.dict()
         timer.zero()
-        return f"loss{aver_loss:.3f}-{time_info}"
+        return f"loss{aver_loss:.4f}-{time_info}"
     
 
     def train(self):
@@ -290,7 +290,7 @@ class GraphTrainer(AbstractTrainer):
             average_meter_set.update('loss', loss.item())
             if not self.pilot:
                 tqdm_dataloader.set_description(
-                    'Epoch {}, loss {:.3f} '.format(epoch, average_meter_set['loss'].avg))
+                    'Epoch {}, loss {:.4f} '.format(epoch, average_meter_set['loss'].avg))
 
             accum_iter += batch_size
 
@@ -361,7 +361,7 @@ class GraphTrainer(AbstractTrainer):
                 if not self.pilot:
                     description_metrics = ['NDCG@%d' % k for k in self.metric_ks[:3]] +\
                                           ['Recall@%d' % k for k in self.metric_ks[:3]]
-                    description = '{}: '.format(mode.capitalize()) + ', '.join(s + ' {:.3f}' for s in description_metrics)
+                    description = '{}: '.format(mode.capitalize()) + ', '.join(s + ' {:.4f}' for s in description_metrics)
                     description = description.replace('NDCG', 'N').replace('Recall', 'R')
                     description = description.format(*(average_meter_set[k].avg for k in description_metrics))
                     tqdm_dataloader.set_description(description)

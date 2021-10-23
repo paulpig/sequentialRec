@@ -93,7 +93,7 @@ experiment_group: test
 # experiment_name: sas_v2
 # experiment_name: bert_beauty_bert_baseline_argument_occurrence_graph_improve_add_pretrain
 # experiment_name: bert_beauty_bert_baseline_argument_occurrence_graph_improve_add_pretrain_ablation
-experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_graph_finetune_sasrec_both_user_and_item_v3
+experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_graph_finetune_sasrec_both_user_and_item_v4_new
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_graph_finetune_sasrec
 # experiment_name: 5_core_both_view_buy_no_pretrain_graph_finetune_sasrec_bot
 # experiment_name: bert_beauty_bert_baseline_argument_test_v6
@@ -109,7 +109,8 @@ meta: training
 finetune_flag: false
 resume_training: false
 graph_path: /pub/data/kyyx/wbc/MEANTIME/Data/beauty/
-graph_filename: 5_core_beauty_rm_2_low_items_graph_both_view_buy.txt
+# graph_filename: 5_core_beauty_rm_2_low_items_graph_both_view_buy.txt
+graph_filename: beauty_graph_5_core_both_view_buy.txt
 latent_dim_rec: 64
 lightGCN_n_layers: 2
 keep_prob: 0.5

@@ -1,6 +1,6 @@
 from ..base import BaseModel
 from .embeddings import *
-from .bodies import ExactSasBody
+from .bodies import SasBody
 
 import torch
 import torch.nn as nn
@@ -12,7 +12,7 @@ class SASModel(BaseModel):
         self.output_info = args.output_info
         self.token_embedding = TokenEmbedding(args)
         self.positional_embedding = PositionalEmbedding(args)
-        self.body = ExactSasBody(args)
+        self.body = SasBody(args)
         self.ln = nn.LayerNorm(args.hidden_units)
         self.dropout = nn.Dropout(p=args.dropout)
         self.init_weights()

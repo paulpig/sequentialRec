@@ -91,3 +91,4 @@ wandb_run_name: null
 wandb_run_id: null
 meta: training
 finetune_flag: false
+add_cate_flag: false

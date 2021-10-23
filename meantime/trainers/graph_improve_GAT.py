@@ -140,26 +140,30 @@ class GraphTrainer(AbstractTrainer):
         # self.lr = config['lr']
         
         with timer(name="Sample"):
-            S = UniformSample_original(self.graph_loader)
+            # S = UniformSample_original(self.graph_loader)
+            S = UniformSample_original_KGE(self.graph_loader) #return <centor_node, rel, posItems, negItems>
         users = torch.Tensor(S[:, 0]).long()
-        posItems = torch.Tensor(S[:, 1]).long()
-        negItems = torch.Tensor(S[:, 2]).long() #(len(train_items))
+        rels = torch.Tensor(S[:, 1]).long()
+        posItems = torch.Tensor(S[:, 2]).long()
+        negItems = torch.Tensor(S[:, 3]).long() #(len(train_items))
 
         users = users.to(self.args.device)
+        rels = rels.to(self.args.device)
         posItems = posItems.to(self.args.device)
         negItems = negItems.to(self.args.device)
-        users, posItems, negItems = shuffle(users, posItems, negItems)
+        users, rels, posItems, negItems = shuffle(users, rels, posItems, negItems)
         # total_batch = len(users) // world.config['bpr_batch_size'] + 1
         total_batch = len(users) // self.args.bpr_batch_size + 1
         aver_loss = 0.
         # pdb.set_trace()
         for (batch_i,
             (batch_users,
+            batch_rels,
             batch_pos,
-            batch_neg)) in enumerate(minibatch(users, posItems, negItems, batch_size=self.args.bpr_batch_size)):
+            batch_neg)) in enumerate(minibatch(users, rels, posItems, negItems, batch_size=self.args.bpr_batch_size)):
             # cri = bpr.stageOne(batch_users, batch_pos, batch_neg)
             # loss, reg_loss = self.model.bpr_loss(batch_users, batch_pos, batch_neg)
-            loss, reg_loss = self.graph_model.bpr_loss(batch_users, batch_pos, batch_neg)
+            loss, reg_loss = self.graph_model.bpr_loss(batch_users, batch_pos, batch_neg, batch_rels)
             reg_loss = reg_loss*self.weight_decay
             loss = loss + reg_loss
 
@@ -223,7 +227,7 @@ class GraphTrainer(AbstractTrainer):
             att = self.graph_model.updateAttentionScore()
             self.graph_model.Graph = att
 
-        return f"loss{aver_loss:.3f}-{time_info}" + "----------" + f"loss{tranR_aver_loss:.3f}-{tranR_time_info}"
+        return f"loss{aver_loss:.4f}-{time_info}" + "----------" + f"loss{tranR_aver_loss:.4f}-{tranR_time_info}"
     
 
     def train(self):
@@ -353,7 +357,7 @@ class GraphTrainer(AbstractTrainer):
             average_meter_set.update('loss', loss.item())
             if not self.pilot:
                 tqdm_dataloader.set_description(
-                    'Epoch {}, loss {:.3f} '.format(epoch, average_meter_set['loss'].avg))
+                    'Epoch {}, loss {:.4f} '.format(epoch, average_meter_set['loss'].avg))
 
             accum_iter += batch_size
 
@@ -425,7 +429,7 @@ class GraphTrainer(AbstractTrainer):
                 if not self.pilot:
                     description_metrics = ['NDCG@%d' % k for k in self.metric_ks[:3]] +\
                                           ['Recall@%d' % k for k in self.metric_ks[:3]]
-                    description = '{}: '.format(mode.capitalize()) + ', '.join(s + ' {:.3f}' for s in description_metrics)
+                    description = '{}: '.format(mode.capitalize()) + ', '.join(s + ' {:.4f}' for s in description_metrics)
                     description = description.replace('NDCG', 'N').replace('Recall', 'R')
                     description = description.format(*(average_meter_set[k].avg for k in description_metrics))
                     tqdm_dataloader.set_description(description)

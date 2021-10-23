@@ -97,3 +97,4 @@ constrastive_weight: 0.0
 finetune_flag: false
 resume_training: false
 cl_binary_flag: false
+add_cate_flag: false
