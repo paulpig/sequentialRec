@@ -8,9 +8,9 @@ from scipy.sparse import csr_matrix
 import scipy.sparse as sp
 
 
-class KGAT(BertBaseModel):
+class DisMulti(BertBaseModel):
     def __init__(self, config:dict, dataset):
-        super(KGAT, self).__init__(config)
+        super(DisMulti, self).__init__(config)
         self.config = config
         self.dataset = dataset  #dataloader.BasicDataset
         self.__init_weight()
@@ -34,11 +34,15 @@ class KGAT(BertBaseModel):
             num_embeddings=self.num_items, embedding_dim=self.latent_dim)
 
         
-        self.attribute_nums = len(self.dataset.attribute2id)
-        self.rel_nums = len(self.dataset.rel2id)
+        self.attribute_nums = len(self.dataset.item2id)
+        self.rel_type_nums = len(self.dataset.reltype2id)
+        self.rel_value_nums = len(self.dataset.relvalue2id)
 
-        self.embedding_rel = torch.nn.Embedding(
-            num_embeddings=self.rel_nums, embedding_dim=self.latent_dim)
+        self.embedding_rel_type = torch.nn.Embedding(
+            num_embeddings=self.rel_type_nums, embedding_dim=self.latent_dim)
+        
+        self.embedding_rel_value = torch.nn.Embedding(
+            num_embeddings=self.rel_value_nums, embedding_dim=self.latent_dim)
         # self.embedding_attribute = torch.nn.Embedding(
         #     num_embeddings=self.attribute_nums, embedding_dim=self.latent_dim)
         if self.config.graph_pretrain == False:
@@ -46,14 +50,15 @@ class KGAT(BertBaseModel):
 #             nn.init.xavier_uniform_(self.embedding_item.weight, gain=1)
 #             print('use xavier initilizer')
 # random normal init seems to be a better choice when lightGCN actually don't use any non-linear activation function
-            nn.init.normal_(self.embedding_rel.weight, std=0.1)
+            nn.init.normal_(self.embedding_rel_type.weight, std=0.1)
+            nn.init.normal_(self.embedding_rel_value.weight, std=0.1)
             # nn.init.normal_(self.embedding_attribute.weight, std=0.1)
 
-        self.W_R = nn.Parameter(torch.Tensor(self.rel_nums, self.latent_dim, self.latent_dim))
-        nn.init.normal_(self.W_R, std=0.1)
+        # self.W_R = nn.Parameter(torch.Tensor(self.rel_nums, self.latent_dim, self.latent_dim))
+        # nn.init.normal_(self.W_R, std=0.1)
 
-        self.W_R_hidden = nn.Parameter(torch.Tensor(self.rel_nums, self.latent_dim, self.latent_dim))
-        nn.init.normal_(self.W_R_hidden, std=0.1)
+        # self.W_R_hidden = nn.Parameter(torch.Tensor(self.rel_nums, self.latent_dim, self.latent_dim))
+        # nn.init.normal_(self.W_R_hidden, std=0.1)
 
         # if self.config['pretrain'] == 0:
         if self.config.graph_pretrain == False:
@@ -71,7 +76,7 @@ class KGAT(BertBaseModel):
             print('use pretarined data')
         self.f = nn.Sigmoid()
         self.Graph = self.dataset.getSparseGraph() #初始化图模型的参数, 后续得通过Attention步骤更新临界矩阵;
-        
+        # self.Graph = None
         #all triple 
         self.kg_l2loss_lambda = self.config.kg_l2loss_lambda
         self.all_head_list = self.dataset.all_head_list
@@ -152,6 +157,7 @@ class KGAT(BertBaseModel):
             else:
                 # pdb.set_trace()
                 all_emb_neighbor = torch.sparse.mm(g_droped, all_emb)
+
             
             if self.config.kgat_merge == "bilinear":
                 all_emb = F.leaky_relu(self.W_graph_para_1[layer](all_emb_neighbor + all_emb)) + F.leaky_relu(self.W_graph_para_2[layer](all_emb_neighbor * all_emb_neighbor))
@@ -240,7 +246,7 @@ class KGAT(BertBaseModel):
     def _L2_loss_mean(self, x):
         return torch.mean(torch.sum(torch.pow(x, 2), dim=1, keepdim=False) / 2.)
 
-    def tranR_loss(self, head, rel, pos_tail, neg_tail):
+    def tranR_loss(self, head, rel_type, rel_value, pos_tail, neg_tail):
         """
         Calculating the tranR loss.
         input:
@@ -250,24 +256,31 @@ class KGAT(BertBaseModel):
         """
         # pdb.set_trace()
         head_embeddings = self.embedding_user(head)
-        rel_embeddings = self.embedding_rel(rel)
+        rel_type_embeddings = self.embedding_rel_type(rel_type)
+        rel_value_embeddings = self.embedding_rel_value(rel_value)
         tail_pos_embeddings = self.embedding_item(pos_tail) #(bs, dim)
         tail_neg_embeddings = self.embedding_item(neg_tail)
 
-        W_R_param = self.W_R[rel] #(bs, dim, dim)
+        # W_R_param = self.W_R[rel] #(bs, dim, dim)
         
-        head_embeddings_h = torch.bmm(head_embeddings.unsqueeze(1), W_R_param).squeeze(1) #(bs, dim)
-        tail_embeddings_pos_h = torch.bmm(tail_pos_embeddings.unsqueeze(1), W_R_param).squeeze(1) #(bs, dim)
-        tail_embeddings_neg_h = torch.bmm(tail_neg_embeddings.unsqueeze(1), W_R_param).squeeze(1) #(bs, dim)
+        # head_embeddings_h = torch.bmm(head_embeddings.unsqueeze(1), W_R_param).squeeze(1) #(bs, dim)
+        # tail_embeddings_pos_h = torch.bmm(tail_pos_embeddings.unsqueeze(1), W_R_param).squeeze(1) #(bs, dim)
+        # tail_embeddings_neg_h = torch.bmm(tail_neg_embeddings.unsqueeze(1), W_R_param).squeeze(1) #(bs, dim)
+        
+        # pos_score = torch.sum(torch.pow(head_embeddings_h + rel_embeddings - tail_embeddings_pos_h, 2), dim=1)     # (kg_batch_size)
+        # neg_score = torch.sum(torch.pow(head_embeddings_h + rel_embeddings - tail_embeddings_neg_h, 2), dim=1)     # (kg_batch_size)
 
-        pos_score = torch.sum(torch.pow(head_embeddings_h + rel_embeddings - tail_embeddings_pos_h, 2), dim=1)     # (kg_batch_size)
-        neg_score = torch.sum(torch.pow(head_embeddings_h + rel_embeddings - tail_embeddings_neg_h, 2), dim=1)     # (kg_batch_size)
+        head_embeddings_h = head_embeddings
+        tail_embeddings_pos_h = tail_pos_embeddings
+        tail_embeddings_neg_h = tail_neg_embeddings
+        pos_score = (head_embeddings * (rel_type_embeddings + rel_value_embeddings) * tail_pos_embeddings).sum(-1) #(bs)
+        neg_score = (head_embeddings * (rel_type_embeddings + rel_value_embeddings) * tail_neg_embeddings).sum(-1) #(bs)
 
         # Equation (2)
         kg_loss = (-1.0) * F.logsigmoid(neg_score - pos_score)
         kg_loss = torch.mean(kg_loss)
 
-        l2_loss = self._L2_loss_mean(head_embeddings_h) + self._L2_loss_mean(rel_embeddings) + self._L2_loss_mean(tail_embeddings_pos_h) + self._L2_loss_mean(tail_embeddings_neg_h)
+        l2_loss = self._L2_loss_mean(head_embeddings_h) + self._L2_loss_mean(rel_type_embeddings) + self._L2_loss_mean(rel_value_embeddings)+ self._L2_loss_mean(tail_embeddings_pos_h) + self._L2_loss_mean(tail_embeddings_neg_h)
         # pdb.set_trace()
         # loss = kg_loss + self.kg_l2loss_lambda * l2_loss
 

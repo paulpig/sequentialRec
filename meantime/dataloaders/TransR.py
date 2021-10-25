@@ -38,7 +38,6 @@ class GraphLoader():
         self.mode = self.mode_dict['train']
         self.n_user = 0
         self.m_item = 0
-        self.item2id = item2id
         # train_file = path + '/graph.txt'
         # train_file = path + '/new_graph.txt' #未保证target item没有提前泄露;
         # train_file = path + '/new_cocurrence.txt' #未保证target item没有提前泄露;
@@ -48,7 +47,7 @@ class GraphLoader():
         # train_file = path + '/rm_2_low_items_cocurrence_correct_rm_valid.txt' #未保证target item没有提前泄露;
         # train_file = path + '/rm_5_low_items_cocurrence_correct_rm_valid.txt' #未保证target item没有提前泄露;
         # train_file = path + config.graph_filename #重新构建, 每行由<head, rel, tail> 构成;
-        train_file = path + config.graph_filename_single_graph #重新构建, 每行由<head, rel, rel_value, tail> 构成;
+        train_file = path + config.graph_filename #重新构建, 每行由<head, rel, tail> 构成;
           
         print("Loading datafile is: ", train_file)
         # train_file = path
@@ -60,10 +59,8 @@ class GraphLoader():
         self.testDataSize = 0
         single_edge_number = 0 
 
-        self.reltype2id = {}
-        self.relvalue2id = {}
-        self.relvalue2reltype = {}
-        self.attribute2id = {}
+        self.rel2id = {}
+        self.attribute2id = item2id
 
         self.all_head_list = []
         self.all_rel_list = []
@@ -74,30 +71,22 @@ class GraphLoader():
             for l in f.readlines():
                 if len(l) > 0:
                     l = l.strip('\n').split(' ')
-                    rel_type = l[1]
-                    rel_value = l[2]
-                    attribute = l[3]
-                    
-                    if rel_type not in self.reltype2id:
-                        self.reltype2id[rel_type] = len(self.reltype2id)
-                    
-                    if rel_value not in self.relvalue2id:
-                        self.relvalue2id[rel_value] = len(self.relvalue2id)
+                    rel = l[1]
+                    attribute = l[2]
+
+                    if rel not in self.rel2id:
+                        self.rel2id[rel] = len(self.rel2id)
                     
                     # if attribute not in self.attribute2id:
                     #     self.attribute2id[attribute] = len(self.attribute2id)
 
-
-                    if self.relvalue2id[rel_value] not in self.relvalue2reltype:
-                        self.relvalue2reltype[self.relvalue2id[rel_value]] = self.reltype2id[rel_type]
-                    
-                    rel_value_id = int(self.relvalue2id[rel_value])
-                    attribute_id = int(item2id[attribute])
+                    rel_id = int(self.rel2id[rel])
+                    attribute_id = int(self.attribute2id[attribute])
                     uid = int(item2id[l[0]])
 
                     
                     self.all_head_list.append(uid)
-                    self.all_rel_list.append(rel_value_id)
+                    self.all_rel_list.append(rel_id)
                     self.all_tail_list.append(attribute_id)
 
 
@@ -113,8 +102,8 @@ class GraphLoader():
         # self.m_item += 1 #为什么要加add 1
         # self.n_user += 1
         
-        self.m_item = len(item2id) + 1
-        # self.m_item = len(self.attribute2id) + 1
+        # self.m_item = len(item2id) + 1
+        self.m_item = len(self.attribute2id) + 1
         self.n_user = len(item2id) + 1
 
         print("single_edge_number: {}".format(single_edge_number))
@@ -130,7 +119,6 @@ class GraphLoader():
         print(f"Graph Sparsity: {(self.trainDataSize) / self.n_users / self.m_items}")
 
         # (users,items), bipartite graph
-        # pdb.set_trace()
         self.UserItemNet = csr_matrix((np.ones(len(self.trainUser)), (self.trainUser, self.trainItem)),
                                       shape=(self.n_user, self.m_item)) #第一参数: value, 第二个采纳数: index;
         # pdb.set_trace()
@@ -219,7 +207,7 @@ class GraphLoader():
         if self.Graph is None:
             try:
                 # pre_adj_mat = sp.load_npz(self.path + '/s_pre_adj_mat_{}.npz'.format(self.config.model_code))
-                pre_adj_mat = sp.load_npz(self.path + '/s_pre_adj_mat_{}_kgat.npz'.format(self.config.experiment_name))
+                pre_adj_mat = sp.load_npz(self.path + '/s_pre_adj_mat_{}_transR.npz'.format(self.config.experiment_name))
                 print("successfully loaded...")
                 norm_adj = pre_adj_mat
             except :
@@ -247,7 +235,7 @@ class GraphLoader():
                 end = time()
                 print(f"costing {end-s}s, saved norm_mat...")
                 # sp.save_npz(self.path + '/s_pre_adj_mat_{}.npz'.format(self.config.model_code), norm_adj)
-                sp.save_npz(self.path + '/s_pre_adj_mat_{}_kgat.npz'.format(self.config.experiment_name), norm_adj)
+                sp.save_npz(self.path + '/s_pre_adj_mat_{}_transR.npz'.format(self.config.experiment_name), norm_adj)
 
             if self.split == True:
                 self.Graph = self._split_A_hat(norm_adj)

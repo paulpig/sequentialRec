@@ -227,11 +227,11 @@ class TransR(BertBaseModel):
     
     def getUserItemEmb(self):
         # all_users, all_items = self.computer()
-        if self.config.kgat_output == "emb":
-            all_users = self.embedding_user.weight
-            all_items = self.embedding_item.weight
-        elif self.config.kgat_output == "hidden":
-            all_users, all_items = self.computer()
+        # if self.config.kgat_output == "emb":
+        all_users = self.embedding_user.weight
+        all_items = self.embedding_item.weight
+        # elif self.config.kgat_output == "hidden":
+        #     all_users, all_items = self.computer()
             
         return all_users, all_items
 

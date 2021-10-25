@@ -34,7 +34,7 @@ test_negative_sampler_code: random
 test_negative_sample_size: 100
 # test_negative_sampling_seed: 98765
 test_negative_sampling_seed: 42
-trainer_code: graph_sasrec_improve_lightgcn_kgat
+trainer_code: graph_sasrec_improve_lightgcn_transR
 device: cuda
 # use_parallel: true
 use_parallel: false
@@ -58,7 +58,7 @@ metric_ks:
 - 20
 - 50
 best_metric: NDCG@10
-saturation_wait_epochs: 5
+saturation_wait_epochs: 20
 # saturation_wait_epochs: 10
 # model_code: sas
 # model_code: sas_finetune
@@ -100,7 +100,7 @@ experiment_group: test
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_merge_rm_kgat
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_merge_rm_lightgcn
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_concat
-experiment_name: 5_core_both_view_buy_graph_sasrec_toys_pretrain_lightgcn_kgat_attention_20_20_hidden_best_result
+experiment_name: 5_core_both_view_buy_graph_sasrec_toys_pretrain_lightgcn_transR_attention_20_20_hidden_v2
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_concat_20_100
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_graph_finetune_sasrec
 # experiment_name: 5_core_both_view_buy_no_pretrain_graph_finetune_sasrec_bot
@@ -119,7 +119,6 @@ resume_training: false
 graph_path: /pub/data/kyyx/wbc/MEANTIME/Data/toys/
 # graph_filename: 5_core_beauty_rm_2_low_items_graph_both_view_buy.txt
 graph_filename_kgat: toys_item_attribute_triple.txt
-# graph_filename: 5_core_toys_rm_2_low_items_graph_both_view_buy.txt
 graph_filename: toys_graph_5_core_both_buy_view.txt
 latent_dim_rec: 64
 # latent_dim_rec: 128
@@ -142,9 +141,8 @@ rm_self_node: false
 # merge_type: rm_lightgcn
 # merge_type: gate
 # merge_type: concat
-# merge_type: attention
-merge_type: add
+merge_type: attention
 # kgat_merge: lightgcn
 kgat_merge: bilinear
 # kgat_output: emb
-kgat_output: hidden
+kgat_output: emb

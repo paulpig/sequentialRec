@@ -281,6 +281,38 @@ def UniformSample_original_KGE(dataset, rel_type=None):
     
     return np.array(S)
 
+
+
+def UniformSample_original_DisMulti(dataset, rel_type=None):
+    """
+    The input of the KGE.
+    :return:
+        np.array: (trainDataSize, 4), each element is <user, rels, positem, negitem>
+    The parameter 'dataset' is from ./dataloaders/graph.py, class Loader;
+    """
+
+    total_start = time()
+    # dataset : BasicDataset
+    graph_kge_dict = dataset.graph_kge
+    userNum = len(graph_kge_dict.keys())
+    all_head = list(graph_kge_dict.keys())
+    trainNumber = len(dataset.all_head_list) #测试使用;
+    attribute_voc = len(dataset.item2id)
+    relvalue2type = dataset.relvalue2reltype
+
+    # pdb.set_trace()
+    users = np.random.randint(0, userNum, trainNumber)
+    S = []
+    for index, user_index in enumerate(users):
+        if index % 1000000 == 0:
+            print("{}/{}".format(index, len(users)))
+        head = all_head[user_index]
+        sample_relations, sample_pos_tails = sample_pos_triples_for_h(graph_kge_dict, head, 1)
+        sample_neg_tails = sample_neg_triples_for_h(graph_kge_dict, head, sample_relations[0], 1, attribute_voc)
+        
+        S.append([head, relvalue2type[sample_relations[0]], sample_relations[0], sample_pos_tails[0], sample_neg_tails[0]])
+    
+    return np.array(S)
     # attribute2id = dataset.attribute2id
 
     # S = []
