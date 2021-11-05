@@ -1,6 +1,5 @@
 templates: []
 mode: train
-# mode: test
 # resume_training: false
 pilot: false
 pretrained_weights: null
@@ -9,7 +8,7 @@ num_items: null
 num_ratings: null
 num_days: null
 local_data_folder: ./Data
-dataset_code: beauty
+dataset_code: sports
 # min_rating: 0
 min_rating: 0
 min_uc: 5
@@ -32,8 +31,7 @@ train_negative_sample_size: 1000 #sasrec负样本中1000中随机筛选一个;
 train_negative_sampling_seed: 42
 # test_negative_sampler_code: popular
 test_negative_sampler_code: random
-# test_negative_sample_size: 100
-test_negative_sample_size: 99
+test_negative_sample_size: 100
 # test_negative_sampling_seed: 98765
 test_negative_sampling_seed: 42
 trainer_code: graph_sasrec_improve_lightgcn_kgat
@@ -65,7 +63,7 @@ saturation_wait_epochs: 20
 # model_code: sas
 # model_code: sas_finetune
 # model_code: sas_finetune_graph_improve_ablation_both_item_user
-model_code: graph_sasrec_improve_lightgcn_kgat
+model_code: gru4recGraph
 # model_init_seed: 0
 model_init_seed: 42
 model_init_range: 0.02
@@ -102,7 +100,7 @@ experiment_group: test
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_merge_rm_kgat
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_merge_rm_lightgcn
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_concat
-experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_attention_20_20_hidden_add_valid_v2_best
+experiment_name: 5_core_both_view_buy_graph_gru4rec_sports_no_pretrain_lightgcn_kgat_attention_20_20_hidden_v2_new_v2
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_concat_20_100
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_graph_finetune_sasrec
 # experiment_name: 5_core_both_view_buy_no_pretrain_graph_finetune_sasrec_bot
@@ -118,11 +116,10 @@ meta: training
 # resume_training: true
 finetune_flag: false
 resume_training: false
-graph_path: /pub/data/kyyx/wbc/MEANTIME/Data/beauty/
+graph_path: /pub/data/kyyx/wbc/MEANTIME/Data/sports/
 # graph_filename: 5_core_beauty_rm_2_low_items_graph_both_view_buy.txt
-graph_filename_kgat: beauty_item_attribute_triple.txt
-# graph_filename: 5_core_beauty_rm_2_low_items_graph_both_view_buy.txt
-graph_filename: beauty_graph_5_core_both_view_buy.txt
+graph_filename_kgat: sports_item_attribute_triple.txt
+graph_filename: sports_graph_5_core_both_buy_view.txt
 latent_dim_rec: 64
 # latent_dim_rec: 128
 lightGCN_n_layers: 2
@@ -131,8 +128,8 @@ A_split: false
 graph_pretrain: false
 graph_dropout: false
 pooling_type: None
-graph_epochs: 20
-graph_attribute_epochs: 20
+graph_epochs: 0
+graph_attribute_epochs: 0
 # graph_epochs: 1
 bpr_batch_size: 2048
 add_graph_flag: true
@@ -149,4 +146,7 @@ merge_type: attention
 kgat_merge: bilinear
 # kgat_output: emb
 kgat_output: hidden
-sparsity_ratio: 1.0
+constrastive_model_flag: false
+constrastive_input_flag: false
+constrastive_flag: false
+cl_binary_flag: false

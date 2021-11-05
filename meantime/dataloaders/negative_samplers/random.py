@@ -3,6 +3,7 @@ from .base import AbstractNegativeSampler
 from tqdm import trange
 
 import numpy as np
+import pdb
 
 
 class RandomNegativeSampler(AbstractNegativeSampler):
@@ -27,7 +28,9 @@ class RandomNegativeSampler(AbstractNegativeSampler):
             p = prob.copy()
             p[zeros] = 0.0
             p = p / p.sum()
-
+            # print("len(items):", len(items))
+            # pdb.set_trace()
+            # self.sample_size = len(items) - len(seen) -1
             samples = np.random.choice(items, self.sample_size, replace=False, p=p)
             negative_samples[user] = samples.tolist()
         return negative_samples

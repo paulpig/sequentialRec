@@ -1,4 +1,3 @@
-from time import time
 from meantime.loggers import *
 # from config import STATE_DICT_KEY, OPTIMIZER_STATE_DICT_KEY, TRAIN_LOADER_RNG_STATE_DICT_KEY
 from meantime.config import *
@@ -8,7 +7,6 @@ from meantime.analyze_table import find_saturation_point
 from meantime.dataloaders import get_dataloader
 from .utils import recalls_and_ndcgs_for_ks
 import json
-import time
 
 from .base import AbstractTrainer
 from meantime.trainers.utils import UniformSample_original, timer, minibatch, shuffle, UniformSample_original_KGE
@@ -121,7 +119,7 @@ class GraphTrainer(AbstractTrainer):
     @classmethod
     def code(cls):
         # return 'graph_sasrec_improve_add_cate_brand'
-        return 'graph_sasrec_improve_lightgcn_kgat'
+        return 'graph_sasrec_improve_lightgcn_kgat_no_finetune_graph'
 
     def add_extra_loggers(self):
         pass
@@ -424,9 +422,8 @@ class GraphTrainer(AbstractTrainer):
 
             self.optimizer.step()
             # self.lr_scheduler.step()  # step before val because state_dict is saved at val. it doesn't affect val result
-            start_time = time.time()
+
             val_log_data = self.validate(epoch, accum_iter, mode='val') #用验证代码, 每次保存模型, 调用log_val方法;
-            print("val time: {}".format(time.time()-start_time))
             metric = val_log_data[self.best_metric] #默认是NDCG指标;
             if metric > best_metric:
                 best_metric = metric
@@ -639,7 +636,8 @@ class GraphTrainer(AbstractTrainer):
             betas = (args.adam_beta1, args.adam_beta2)
             # return optim.Adam(list(self.model.parameters()) + list(self.graph_model.parameters()) + list(self.graph_model_cate.parameters()), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
             # return optim.Adam(list(self.model.parameters()) + list(self.graph_model.parameters()) + list(self.graph_model_kgat.parameters()), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
-            return optim.Adam(list(self.model.parameters()) + list(self.graph_model.parameters()), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
+            # return optim.Adam(list(self.model.parameters()) + list(self.graph_model.parameters()), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
+            return optim.Adam(list(self.model.parameters()), lr=args.lr, weight_decay=args.weight_decay, betas=betas)
         elif args.optimizer.lower() == 'sgd':
             return optim.SGD(list(self.model.parameters()) + list(self.graph_model.parameters()), lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
         else:

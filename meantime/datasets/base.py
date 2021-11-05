@@ -212,6 +212,14 @@ class AbstractDataset(metaclass=ABCMeta):
         else:
             raise ValueError
 
+        #add Sparsity ratio
+        pdb.set_trace()
+        if self.args.sparsity_ratio !=1.0:
+            # pdb.set_trace()
+            print("-------------------------------sparsity ratio: {}------------------------------".format(self.args.sparsity_ratio))
+            random_indexes = np.random.choice(len(train_targets), size=int(self.args.sparsity_ratio*len(train_targets)), replace=False).tolist()
+            train_targets = [item for index, item in enumerate(train_targets) if index in random_indexes]
+        
         return user2dict, train_targets, validation_targets, test_targets
 
     def _get_rawdata_root_path(self):

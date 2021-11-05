@@ -2,7 +2,8 @@ templates: []
 mode: train
 # mode: test
 # resume_training: false
-pilot: false
+# pilot: false
+pilot: true
 pretrained_weights: null
 num_users: null
 num_items: null
@@ -12,14 +13,15 @@ local_data_folder: ./Data
 dataset_code: beauty
 # min_rating: 0
 min_rating: 0
-min_uc: 5
-min_sc: 5
+min_uc: 5.0
+min_sc: 5.0
 split: leave_one_out
 dataloader_code: sas
 # dataloader_random_seed: 0.0
-dataloader_random_seed: 42.0
+dataloader_random_seed: 1089.0
 train_batch_size: 256
-val_batch_size: 256
+# val_batch_size: 256
+val_batch_size: 5
 test_batch_size: 256
 train_window: 100 #是什么参数?? 从尾部向前滑动的窗口大小, 目的是为了让较长的行为序列分割成多个行为序列;
 dataloader_output_timestamp: false
@@ -29,13 +31,14 @@ train_negative_sampler_code: random #随机采样labels, sasrec的负样本从�
 # train_negative_sampler_code: popular #随机采样labels, sasrec的负样本从中构建;
 train_negative_sample_size: 1000 #sasrec负样本中1000中随机筛选一个;
 # train_negative_sampling_seed: 12345
-train_negative_sampling_seed: 42
+train_negative_sampling_seed: 1089
 # test_negative_sampler_code: popular
 test_negative_sampler_code: random
 # test_negative_sample_size: 100
-test_negative_sample_size: 99
+# test_negative_sample_size: 99
+test_negative_sample_size: 11000
 # test_negative_sampling_seed: 98765
-test_negative_sampling_seed: 42
+test_negative_sampling_seed: 1089
 trainer_code: graph_sasrec_improve_lightgcn_kgat
 device: cuda
 # use_parallel: true
@@ -67,7 +70,7 @@ saturation_wait_epochs: 20
 # model_code: sas_finetune_graph_improve_ablation_both_item_user
 model_code: graph_sasrec_improve_lightgcn_kgat
 # model_init_seed: 0
-model_init_seed: 42
+model_init_seed: 58
 model_init_range: 0.02
 # max_len: 200
 max_len: 50
@@ -102,7 +105,7 @@ experiment_group: test
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_merge_rm_kgat
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_merge_rm_lightgcn
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_concat
-experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_attention_20_20_hidden_add_valid_v2_best
+experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_attention_20_20_hidden_add_valid_v2_02_percent_v2_dddd
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_concat_20_100
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_graph_finetune_sasrec
 # experiment_name: 5_core_both_view_buy_no_pretrain_graph_finetune_sasrec_bot
@@ -131,8 +134,8 @@ A_split: false
 graph_pretrain: false
 graph_dropout: false
 pooling_type: None
-graph_epochs: 20
-graph_attribute_epochs: 20
+graph_epochs: 0
+graph_attribute_epochs: 0
 # graph_epochs: 1
 bpr_batch_size: 2048
 add_graph_flag: true
@@ -149,4 +152,4 @@ merge_type: attention
 kgat_merge: bilinear
 # kgat_output: emb
 kgat_output: hidden
-sparsity_ratio: 1.0
+sparsity_ratio: 0.1

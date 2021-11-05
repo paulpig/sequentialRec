@@ -18,7 +18,7 @@ dataloader_code: sas
 # dataloader_random_seed: 0.0
 dataloader_random_seed: 42.0
 train_batch_size: 256
-val_batch_size: 256
+val_batch_size: 5
 test_batch_size: 256
 train_window: 100 #是什么参数?? 从尾部向前滑动的窗口大小, 目的是为了让较长的行为序列分割成多个行为序列;
 dataloader_output_timestamp: false
