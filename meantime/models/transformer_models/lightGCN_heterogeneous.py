@@ -189,7 +189,7 @@ class LightGCNHeterogeneous(BertBaseModel):
                 # pdb.set_trace()
                 all_emb_buy = torch.sparse.mm(g_droped_buy, all_emb) #(node_number, dim)
             
-            #添加边信息
+            # 添加边信息
             # all_emb = nn.functional.leaky_relu(torch.matmul(torch.mul(all_emb, relationship), self.gcn_linears[layer]))
             # all_emb_buy = self.gcn_linears[layer](torch.mul(all_emb_buy, relationship_buy))
             # relationship_buy = self.rel_linears[layer](relationship_buy)

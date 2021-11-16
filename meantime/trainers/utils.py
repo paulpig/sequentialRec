@@ -261,7 +261,7 @@ def UniformSample_original_KGE(dataset, rel_type=None):
         np.array: (trainDataSize, 4), each element is <user, rels, positem, negitem>
     The parameter 'dataset' is from ./dataloaders/graph.py, class Loader;
     """
-
+ 
     total_start = time()
     # dataset : BasicDataset
     graph_kge_dict = dataset.graph_kge
@@ -270,6 +270,8 @@ def UniformSample_original_KGE(dataset, rel_type=None):
     trainNumber = len(dataset.all_head_list)
     attribute_voc = len(dataset.attribute2id)
 
+    # print("trainData: ", trainNumber, trainNumber//1000)
+    # trainNumber = trainNumber // 10000
     # pdb.set_trace()
     users = np.random.randint(0, userNum, trainNumber)
     S = []
@@ -281,6 +283,47 @@ def UniformSample_original_KGE(dataset, rel_type=None):
     
     return np.array(S)
 
+
+def UniformSample_original_kgat_item2item(dataset, rel_type=None):
+    """
+    The input of the item2item loss.
+    :return:
+        np.array: (trainDataSize, 4), each element is <user, rels, positem, negitem>
+    The parameter 'dataset' is from ./dataloaders/graph.py, class Loader;
+    """
+
+    total_start = time()
+    # dataset : BasicDataset
+    graph_kge_dict = dataset.graph_kge
+    userNum = len(graph_kge_dict.keys())
+    all_head = list(graph_kge_dict.keys())
+    trainNumber = len(dataset.all_head_list)
+    attribute_voc = len(dataset.attribute2id)
+    allPos = dataset.allPos
+    # pdb.set_trace()
+    users = np.random.randint(0, userNum, trainNumber)
+    S = []
+    for user_index in users:
+        head = all_head[user_index]
+        sample_relations, sample_pos_tails = sample_pos_triples_for_h(graph_kge_dict, head, 1)
+        sample_neg_tails = sample_neg_triples_for_h(graph_kge_dict, head, sample_relations[0], 1, attribute_voc)
+
+        #according to head to sample posuser and neguser
+        # pdb.set_trace()
+        posForUserRel = allPos[head]
+        posindex = np.random.randint(0, len(posForUserRel))
+        positem, pos_rel = posForUserRel[posindex]
+        posForUser = [item[0] for item in posForUserRel]
+        
+        while True:
+            negitem = np.random.randint(0, dataset.n_users) #都是从user维度采样得到;
+            if negitem in posForUser:
+                continue
+            else:
+                break
+        S.append([head, sample_relations[0], sample_pos_tails[0], sample_neg_tails[0], positem, negitem, pos_rel]) 
+    
+    return np.array(S)
 
 
 def UniformSample_original_DisMulti(dataset, rel_type=None):

@@ -38,6 +38,7 @@ class GraphLoader():
         self.mode = self.mode_dict['train']
         self.n_user = 0
         self.m_item = 0
+        # pdb.set_trace()
         # train_file = path + '/graph.txt'
         # train_file = path + '/new_graph.txt' #未保证target item没有提前泄露;
         # train_file = path + '/new_cocurrence.txt' #未保证target item没有提前泄露;
@@ -66,6 +67,8 @@ class GraphLoader():
         self.all_rel_list = []
         self.all_tail_list = []
 
+        self.attribute2item_list = {}
+
         #重写构建邻接矩阵代码这段逻辑, 不仅获取初始化邻接矩阵, 而且得到head, rel and tail list, 用于构建KGE loss and updating the adjacent matrix.
         with open(train_file) as f:
             for l in f.readlines():
@@ -83,7 +86,10 @@ class GraphLoader():
                     rel_id = int(self.rel2id[rel])
                     attribute_id = int(self.attribute2id[attribute])
                     uid = int(item2id[l[0]])
-
+                    if attribute_id not in self.attribute2item_list:
+                        self.attribute2item_list[attribute_id] = [uid]
+                    else:
+                        self.attribute2item_list[attribute_id].append(uid)
                     
                     self.all_head_list.append(uid)
                     self.all_rel_list.append(rel_id)
@@ -129,9 +135,25 @@ class GraphLoader():
         self.users_D[self.users_D == 0.] = 1
         self.items_D = np.array(self.UserItemNet.sum(axis=0)).squeeze()
         self.items_D[self.items_D == 0.] = 1.
+
+        # self.__testDict = self.__build_test()
+
+        # get 2th order neighborhood items
+        self.item2item_pair = dict()
+        for attri_val, item_list in self.attribute2item_list.items():
+                for start_index, start_item in enumerate(item_list):
+                    for end_item in item_list[start_index+1:]:
+                        if start_item not in self.item2item_pair:
+                            self.item2item_pair[start_item] = [(end_item, attri_val)]
+                        else:
+                            self.item2item_pair[start_item].append((end_item, attri_val))
+                        if end_item not in self.item2item_pair:
+                            self.item2item_pair[end_item] = [(start_item, attri_val)]
+                        else:
+                            self.item2item_pair[end_item].append((start_item, attri_val))
+        
         # pre-calculate
         self._allPos = self.getUserPosItems(list(range(self.n_user)))
-        # self.__testDict = self.__build_test()
         print("Success to create the graph dataloader.")
         # print(f"{world.dataset} is ready to go")
 
@@ -276,8 +298,14 @@ class GraphLoader():
 
     def getUserPosItems(self, users):
         posItems = []
+        
         for user in users:
-            posItems.append(self.UserItemNet[user].nonzero()[1]) #将正向items筛选出;
+            # posItems.append(self.UserItemNet[user].nonzero()[1]) #将正向items筛选出;
+            if user not in self.item2item_pair.keys():
+                posItems.append([])
+                print("NON user: ", user)
+            else:
+                posItems.append(self.item2item_pair[user])
         return posItems
 
 

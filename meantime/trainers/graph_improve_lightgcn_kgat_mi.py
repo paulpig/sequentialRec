@@ -25,7 +25,8 @@ from abc import *
 from pathlib import Path
 import os
 import pdb
-from meantime.dataloaders.graph import GraphLoader
+# from meantime.dataloaders.graph import GraphLoader
+from meantime.dataloaders.graph_add_mi import GraphLoader
 # from meantime.dataloaders.graph_cate_brand import GraphLoaderCateBrand
 from meantime.dataloaders.graphGAT import GraphLoader as GATLoader
 # from meantime.dataloaders.graphGAT 
@@ -121,7 +122,7 @@ class GraphTrainer(AbstractTrainer):
     @classmethod
     def code(cls):
         # return 'graph_sasrec_improve_add_cate_brand'
-        return 'graph_sasrec_improve_lightgcn_kgat'
+        return 'graph_sasrec_improve_lightgcn_kgat_add_mi'
 
     def add_extra_loggers(self):
         pass

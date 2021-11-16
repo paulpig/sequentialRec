@@ -121,7 +121,7 @@ class GraphTrainer(AbstractTrainer):
     @classmethod
     def code(cls):
         # return 'graph_sasrec_improve_add_cate_brand'
-        return 'graph_sasrec_improve_lightgcn_kgat'
+        return 'graph_sasrec_improve_lightgcn_kgat_rm_transR'
 
     def add_extra_loggers(self):
         pass
@@ -220,48 +220,48 @@ class GraphTrainer(AbstractTrainer):
         timer.zero()
 
         # add the KGE loss and update the adjacent matrix (TO DO)
-        optim_graph_kge = optim_graph #同一个optim;
+        # optim_graph_kge = optim_graph #同一个optim;
 
-        with timer(name="SampleKGE"):
-            S = UniformSample_original_KGE(self.graph_loader_kgat) #return <centor_node, rel, posItems, negItems>
-        users = torch.Tensor(S[:, 0]).long()
-        rels = torch.Tensor(S[:, 1]).long()
-        posItems = torch.Tensor(S[:, 2]).long()
-        negItems = torch.Tensor(S[:, 3]).long() #(len(train_items))
+        # with timer(name="SampleKGE"):
+        #     S = UniformSample_original_KGE(self.graph_loader_kgat) #return <centor_node, rel, posItems, negItems>
+        # users = torch.Tensor(S[:, 0]).long()
+        # rels = torch.Tensor(S[:, 1]).long()
+        # posItems = torch.Tensor(S[:, 2]).long()
+        # negItems = torch.Tensor(S[:, 3]).long() #(len(train_items))
 
-        # pdb.set_trace()
-        users = users.to(dtype=torch.long, device=self.args.device)
-        rels = rels.to(dtype=torch.long, device=self.args.device)
-        posItems = posItems.to(dtype=torch.long, device=self.args.device)
-        negItems = negItems.to(dtype=torch.long, device=self.args.device)
+        # # pdb.set_trace()
+        # users = users.to(dtype=torch.long, device=self.args.device)
+        # rels = rels.to(dtype=torch.long, device=self.args.device)
+        # posItems = posItems.to(dtype=torch.long, device=self.args.device)
+        # negItems = negItems.to(dtype=torch.long, device=self.args.device)
 
-        users, rels, posItems, negItems = shuffle(users, rels, posItems, negItems)
-        # total_batch = len(users) // world.config['bpr_batch_size'] + 1
-        total_batch = len(users) // self.args.bpr_batch_size + 1
-        tranR_aver_loss = 0.
-        # pdb.set_trace()
-        for (batch_i,
-            (batch_users,
-            batch_rels,
-            batch_pos,
-            batch_neg)) in enumerate(minibatch(users, rels, posItems, negItems, batch_size=self.args.bpr_batch_size)):
+        # users, rels, posItems, negItems = shuffle(users, rels, posItems, negItems)
+        # # total_batch = len(users) // world.config['bpr_batch_size'] + 1
+        # total_batch = len(users) // self.args.bpr_batch_size + 1
+        # tranR_aver_loss = 0.
+        # # pdb.set_trace()
+        # for (batch_i,
+        #     (batch_users,
+        #     batch_rels,
+        #     batch_pos,
+        #     batch_neg)) in enumerate(minibatch(users, rels, posItems, negItems, batch_size=self.args.bpr_batch_size)):
 
-            tranR_loss, reg_loss = self.graph_model_kgat.tranR_loss(batch_users, batch_rels, batch_pos, batch_neg)
+        #     tranR_loss, reg_loss = self.graph_model_kgat.tranR_loss(batch_users, batch_rels, batch_pos, batch_neg)
             
-            # reg_loss = reg_loss*self.kg_l2loss_lambda
-            reg_loss = reg_loss*self.weight_decay
-            tranR_loss = tranR_loss + reg_loss
+        #     # reg_loss = reg_loss*self.kg_l2loss_lambda
+        #     reg_loss = reg_loss*self.weight_decay
+        #     tranR_loss = tranR_loss + reg_loss
 
-            optim_graph_kge.zero_grad()
-            tranR_loss.backward(retain_graph=True)
-            optim_graph_kge.step()
-            cri = tranR_loss.cpu().item()
-            tranR_aver_loss += cri
-            # if world.tensorboard:
-            #     w.add_scalar(f'BPRLoss/BPR', cri, epoch * int(len(users) / world.config['bpr_batch_size']) + batch_i)
-        tranR_aver_loss = tranR_aver_loss / total_batch
-        tranR_time_info = timer.dict()
-        timer.zero()
+        #     optim_graph_kge.zero_grad()
+        #     tranR_loss.backward(retain_graph=True)
+        #     optim_graph_kge.step()
+        #     cri = tranR_loss.cpu().item()
+        #     tranR_aver_loss += cri
+        #     # if world.tensorboard:
+        #     #     w.add_scalar(f'BPRLoss/BPR', cri, epoch * int(len(users) / world.config['bpr_batch_size']) + batch_i)
+        # tranR_aver_loss = tranR_aver_loss / total_batch
+        # tranR_time_info = timer.dict()
+        # timer.zero()
 
         # updating attention scores
         with torch.no_grad():
@@ -269,7 +269,8 @@ class GraphTrainer(AbstractTrainer):
             att = self.graph_model_kgat.updateAttentionScore()
             self.graph_model_kgat.Graph = att
 
-        return f"loss{aver_loss:.4f}-{time_info}" + "----------" + f"loss{tranR_aver_loss:.4f}-{tranR_time_info}"
+        # return f"loss{aver_loss:.4f}-{time_info}" + "----------" + f"loss{tranR_aver_loss:.4f}-{tranR_time_info}"
+        return f"loss{aver_loss:.4f}-{time_info}"
     
 
     # def trainGraphModelOneEpochCate(self, optim_graph):
@@ -426,7 +427,7 @@ class GraphTrainer(AbstractTrainer):
             # self.lr_scheduler.step()  # step before val because state_dict is saved at val. it doesn't affect val result
             start_time = time.time()
             val_log_data = self.validate(epoch, accum_iter, mode='val') #用验证代码, 每次保存模型, 调用log_val方法;
-            # print("val time: {}".format(time.time()-start_time))
+            print("val time: {}".format(time.time()-start_time))
             metric = val_log_data[self.best_metric] #默认是NDCG指标;
             if metric > best_metric:
                 best_metric = metric

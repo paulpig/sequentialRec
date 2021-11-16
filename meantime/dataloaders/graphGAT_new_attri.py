@@ -10,7 +10,7 @@ import scipy.sparse as sp
 from time import time
 import pdb
 
-class GraphAttentionLoader():
+class GraphLoader():
     """
     Dataset type for pytorch \n
     Incldue graph information
@@ -46,95 +46,113 @@ class GraphAttentionLoader():
         # train_file = path + '/rm_low_items_cocurrence_correct.txt' #未保证target item没有提前泄露;
         # train_file = path + '/rm_2_low_items_cocurrence_correct_rm_valid.txt' #未保证target item没有提前泄露;
         # train_file = path + '/rm_5_low_items_cocurrence_correct_rm_valid.txt' #未保证target item没有提前泄露;
-        train_file_cate3 = path + config.graph_filename_cate3
-        train_file_brand = path + config.graph_filename_brand
-        train_file_price = path + config.graph_filename_price
-        
-        print("Loading datafile is: ", train_file_cate3, train_file_brand, train_file_price)
+        # train_file = path + config.graph_filename #重新构建, 每行由<head, rel, tail> 构成;
+        train_file = path + config.graph_filename_kgat #重新构建, 每行由<head, rel, tail> 构成;
+          
+        print("Loading datafile is: ", train_file)
         # train_file = path
         # test_file = path + '/test.txt' #不需要测试集, 在整个数据集中pretrain来获取每个item的表征;
         self.path = path
-
-        self.traindataSize = 0 #三个图的所有节点, 是否需要去重? 不同图之间存在相同的边; 暂时先不去重;
-        self.testDataSize = 0
-        
-
-        self.m_item = len(item2id) + 1
-        self.n_user = len(item2id) + 1
-
-
-        self.UserItemNetCate3 = self.calculateAdj(train_file_cate3, item2id, config)
-        self.UserItemNetBrand = self.calculateAdj(train_file_brand, item2id, config)
-        self.UserItemNetPrice = self.calculateAdj(train_file_price, item2id, config)
-
-        # pre-calculate
-        self._allPos, self._allNeg = self.getUserPosItems(list(range(self.n_user))) #Pos需合并三个不同的图;
-        # self.__testDict = self.__build_test()
-        print("Success to create the graph dataloader.")
-        # print(f"{world.dataset} is ready to go")
-
-
-
-    def calculateAdj(self, train_file, item2id, config):
         trainUniqueUsers, trainItem, trainUser = [], [], []
         # testUniqueUsers, testItem, testUser = [], [], []
-        
-        single_edge_number = 0
+        self.traindataSize = 0
+        self.testDataSize = 0
+        single_edge_number = 0 
+
+        self.rel2id = {}
+        self.attribute2id = item2id
+
+        self.all_head_list = []
+        self.all_rel_list = []
+        self.all_tail_list = []
+
+        #重写构建邻接矩阵代码这段逻辑, 不仅获取初始化邻接矩阵, 而且得到head, rel and tail list, 用于构建KGE loss and updating the adjacent matrix.
         with open(train_file) as f:
             for l in f.readlines():
                 if len(l) > 0:
                     l = l.strip('\n').split(' ')
-                    # items = [int(i) for i in l[1:]]
-                    # pdb.set_trace()
-                    items = [int(item2id[i]) for i in l[1:]]
+                    rel = l[1]
+                    attribute = l[2]
+
+                    if rel not in self.rel2id:
+                        self.rel2id[rel] = len(self.rel2id)
+                    
+                    # if attribute not in self.attribute2id:
+                    #     self.attribute2id[attribute] = len(self.attribute2id)
+
+                    rel_id = int(self.rel2id[rel])
+                    attribute_id = int(self.attribute2id[attribute])
                     uid = int(item2id[l[0]])
-                    # if config.rm_self_node:
-                    #     items.remove(uid)
-                    if config.rm_self_node:
-                        if len(items) == 1: #删除自连边;
-                            single_edge_number += 1
-                            continue
-                    #convert string to int
-                    # uid = user2id[l[0]] #暂时不考虑user对模型的影响, 只考虑items共现的影响;
-                    # uid = int(l[0])
-                    trainUniqueUsers.append(uid)
-                    trainUser.extend([uid] * len(items))
-                    trainItem.extend(items)
-                    # self.m_item = max(self.m_item, max(items))
-                    # self.n_user = max(self.n_user, uid)
-                    # self.traindataSize += len(items)
-        trainUniqueUsers = np.array(trainUniqueUsers)
-        trainUser = np.array(trainUser)
-        trainItem = np.array(trainItem)
+
+                    
+                    self.all_head_list.append(uid)
+                    self.all_rel_list.append(rel_id)
+                    self.all_tail_list.append(attribute_id)
+
+
+                    trainUser.append(uid)
+                    trainItem.append(attribute_id)
+                    self.m_item = max(self.m_item, attribute_id)
+                    self.n_user = max(self.n_user, uid)
+                    self.traindataSize += 1
+        # self.trainUniqueUsers = np.array(trainUniqueUsers)
+        self.trainUser = np.array(trainUser) #item数量;
+        self.trainItem = np.array(trainItem) #attribute数量;
 
         # self.m_item += 1 #为什么要加add 1
         # self.n_user += 1
+        
+        # self.m_item = len(item2id) + 1
+        self.m_item = len(self.attribute2id) + 1
+        self.n_user = len(item2id) + 1
 
         print("single_edge_number: {}".format(single_edge_number))
         print("item number: {}, user number:{}".format(self.m_item, self.n_user))
-        # if 'bert' in self.config.model_code:
-        #     self.m_item += 1
-        #     self.n_user += 1
+        if 'bert' in self.config.model_code:
+            self.m_item += 1
+            self.n_user += 1
         # pdb.set_trace()
-        # Graph = None
-        # print(f"{self.trainDataSize} interactions for training")
+        self.Graph = None
+        print(f"{self.trainDataSize} interactions for training")
         # print(f"{self.testDataSize} interactions for testing")
         # print(f"{world.dataset} Sparsity : {(self.trainDataSize + self.testDataSize) / self.n_users / self.m_items}")
-        # print(f"Graph Sparsity: {(self.trainDataSize) / self.n_users / self.m_items}")
+        print(f"Graph Sparsity: {(self.trainDataSize) / self.n_users / self.m_items}")
 
         # (users,items), bipartite graph
-        UserItemNet = csr_matrix((np.ones(len(trainUser)), (trainUser, trainItem)),
+        self.UserItemNet = csr_matrix((np.ones(len(self.trainUser)), (self.trainUser, self.trainItem)),
                                       shape=(self.n_user, self.m_item)) #第一参数: value, 第二个采纳数: index;
         # pdb.set_trace()
         # assert (self.UserItemNet.transpose() == self.UserItemNet).toarray().all() #必须是对称矩阵才能通过;
         # 共现item relation时, 不需要是对称矩阵, 因此also_review和also_bought是非对称关系;
 
-        # self.users_D = np.array(self.UserItemNet.sum(axis=1)).squeeze()
-        # self.users_D[self.users_D == 0.] = 1
-        # self.items_D = np.array(self.UserItemNet.sum(axis=0)).squeeze()
-        # self.items_D[self.items_D == 0.] = 1.
-        return UserItemNet
+        self.users_D = np.array(self.UserItemNet.sum(axis=1)).squeeze()
+        self.users_D[self.users_D == 0.] = 1
+        self.items_D = np.array(self.UserItemNet.sum(axis=0)).squeeze()
+        self.items_D[self.items_D == 0.] = 1.
+        # pre-calculate
+        self._allPos, self._allNeg = self.getUserPosItems(list(range(self.n_user)))
+        # self.__testDict = self.__build_test()
+        print("Success to create the graph dataloader.")
+        # print(f"{world.dataset} is ready to go")
+
+        #{user: (rel, item)}
+        graph_kge = {}
+        for i, head in enumerate(self.all_head_list):
+            if head not in graph_kge:
+                graph_kge[head] = [(self.all_rel_list[i], self.all_tail_list[i])]
+            else:
+                graph_kge[head].append((self.all_rel_list[i], self.all_tail_list[i]))
+        self.graph_kge = graph_kge
+        # pdb.set_trace()
+
     
+    def conductHeadRelTailList(self, ):
+        """
+        conducting the head list, the rel list and the tail list.
+        """
+
+        return
+
     @property
     def n_users(self):
         return self.n_user
@@ -154,10 +172,6 @@ class GraphAttentionLoader():
     @property
     def allPos(self):
         return self._allPos
-    
-    @property
-    def allNeg(self):
-        return self._allNeg
 
     def _split_A_hat(self,A):
         """
@@ -185,60 +199,54 @@ class GraphAttentionLoader():
         data = torch.FloatTensor(coo.data)
         return torch.sparse.FloatTensor(index, data, torch.Size(coo.shape))
         
-    def getSparseGraph(self, encoding_type='cate3'):
+    def getSparseGraph(self):
         """
             构建归一化矩阵;
         """
-        print("loading adjacency matrix")
+        print("loading kgat adjacency matrix")
+        # pdb.set_trace()
+        if self.Graph is None:
+            try:
+                # pre_adj_mat = sp.load_npz(self.path + '/s_pre_adj_mat_{}.npz'.format(self.config.model_code))
+                pre_adj_mat = sp.load_npz(self.path + '/s_pre_adj_mat_{}_kgat.npz'.format(self.config.experiment_name))
+                print("successfully loaded...")
+                norm_adj = pre_adj_mat
+            except :
+                print("generating adjacency matrix. Both Buy and view.")
+                s = time()
+                adj_mat = sp.dok_matrix((self.n_users + self.m_items, self.n_users + self.m_items), dtype=np.float32) #为什么构建(user_num + item_num, user_num + item_num)矩阵;
+                adj_mat = adj_mat.tolil() #convert list of lists format;
+                R = self.UserItemNet.tolil()
+                adj_mat[:self.n_users, self.n_users:] = R
+                adj_mat[self.n_users:, :self.n_users] = R.T
+                adj_mat = adj_mat.todok() #convert dictionary of Keys format;
+                # adj_mat = adj_mat + sp.eye(adj_mat.shape[0])
+                
+                rowsum = np.array(adj_mat.sum(axis=1))
+                d_inv = np.power(rowsum, -0.5).flatten()
+                d_inv[np.isinf(d_inv)] = 0.
+                d_mat = sp.diags(d_inv) #(user_num + item_num)
+                
+                """
+                乘以两次对角矩阵的原因是分别除以入度的平方根和出度的平方根;
+                """ 
+                norm_adj = d_mat.dot(adj_mat)
+                norm_adj = norm_adj.dot(d_mat)
+                norm_adj = norm_adj.tocsr()
+                end = time()
+                print(f"costing {end-s}s, saved norm_mat...")
+                # sp.save_npz(self.path + '/s_pre_adj_mat_{}.npz'.format(self.config.model_code), norm_adj)
+                sp.save_npz(self.path + '/s_pre_adj_mat_{}_kgat.npz'.format(self.config.experiment_name), norm_adj)
 
-        if encoding_type == 'cate3':
-            self.UserItemNet = self.UserItemNetCate3
-        elif encoding_type == 'brand':
-            self.UserItemNet = self.UserItemNetBrand
-        elif encoding_type == 'price':
-            self.UserItemNet = self.UserItemNetPrice
-        
-        # if self.Graph is None:
-        try:
-            # pre_adj_mat = sp.load_npz(self.path + '/s_pre_adj_mat_{}.npz'.format(self.config.model_code))
-            pre_adj_mat = sp.load_npz(self.path + '/s_pre_adj_mat_{}_{}.npz'.format(encoding_type, self.config.experiment_name))
-            print("successfully loaded...")
-            norm_adj = pre_adj_mat
-        except :
-            print("generating adjacency matrix cate !!!!!!!!!!!!!!!!!")
-            s = time()
-            adj_mat = sp.dok_matrix((self.n_users + self.m_items, self.n_users + self.m_items), dtype=np.float32) #为什么构建(user_num + item_num, user_num + item_num)矩阵;
-            adj_mat = adj_mat.tolil() #convert list of lists format;
-            R = self.UserItemNet.tolil()
-            adj_mat[:self.n_users, self.n_users:] = R
-            adj_mat[self.n_users:, :self.n_users] = R.T
-            adj_mat = adj_mat.todok() #convert dictionary of Keys format;
-            # adj_mat = adj_mat + sp.eye(adj_mat.shape[0])
-            
-            rowsum = np.array(adj_mat.sum(axis=1))
-            d_inv = np.power(rowsum, -0.5).flatten()
-            d_inv[np.isinf(d_inv)] = 0.
-            d_mat = sp.diags(d_inv) #(user_num + item_num)
-            
-            """
-            乘以两次对角矩阵的原因是分别除以入度的平方根和出度的平方根;
-            """ 
-            norm_adj = d_mat.dot(adj_mat)
-            norm_adj = norm_adj.dot(d_mat)
-            norm_adj = norm_adj.tocsr()
-            end = time()
-            print(f"costing {end-s}s, saved norm_mat...")
-            # sp.save_npz(self.path + '/s_pre_adj_mat_{}.npz'.format(self.config.model_code), norm_adj)
-            sp.save_npz(self.path + '/s_pre_adj_mat_{}_{}.npz'.format(encoding_type, self.config.experiment_name), norm_adj)
+            if self.split == True:
+                self.Graph = self._split_A_hat(norm_adj)
+                print("done split matrix")
+            else:
+                self.Graph = self._convert_sp_mat_to_sp_tensor(norm_adj)
+                self.Graph = self.Graph.coalesce().to(self.config.device)
+                print("don't split the matrix")
+        return self.Graph
 
-        if self.split == True:
-            Graph = self._split_A_hat(norm_adj)
-            print("done split matrix")
-        else:
-            Graph = self._convert_sp_mat_to_sp_tensor(norm_adj)
-            Graph = Graph.coalesce().to(self.config.device)
-            print("don't split the matrix")
-        return Graph
 
     # def __build_test(self):
     #     """
@@ -266,33 +274,39 @@ class GraphAttentionLoader():
         # print(self.UserItemNet[users, items])
         return np.array(self.UserItemNet[users, items]).astype('uint8').reshape((-1,))
 
+    # def getUserPosItems(self, users):
+    #     posItems = []
+    #     for user in users:
+    #         posItems.append(self.UserItemNet[user].nonzero()[1]) #将正向items筛选出;
+    #     return posItems
+
+
     def getUserPosItems(self, users):
         posItems = []
         negItems = []
         allVoc = [index for index in range(self.m_items)]
 
         for index, user in enumerate(users):
-            UserItemNetCate = set(self.UserItemNetCate3[user].nonzero()[1]) | set(self.UserItemNetBrand[user].nonzero()[1]) | set(self.UserItemNetPrice[user].nonzero()[1])
+            # UserItemNetCate = set(self.UserItemNetCate3[user].nonzero()[1]) | set(self.UserItemNetBrand[user].nonzero()[1]) | set(self.UserItemNetPrice[user].nonzero()[1])
             # UserItemNetCate = set(self.UserItemNetCate3[user].nonzero()[1])
             # posItems.append(self.UserItemNetCate3[user].nonzero()[1]) #将正向items筛选出;
             # posItems.append(self.UserItemNetBrand[user].nonzero()[1]) #将正向items筛选出;
             # posItems.append(self.UserItemNetPrice[user].nonzero()[1]) #将正向items筛选出;
             # UserItemNetCateNeg = [index for index in range(self.m_items) if index not in UserItemNetCate]
+            
+            UserItemNetCate = set(self.UserItemNet[user].nonzero()[1])
 
             negativeItems = list(set(allVoc) - set(UserItemNetCate))
 
             UserItemNetCate = list(UserItemNetCate)
-            # self.traindataSize += len(UserItemNetCate)
+            self.traindataSize += len(UserItemNetCate)
             posItems.append(UserItemNetCate)
             negItems.append(negativeItems)
             # print("{}/{}".format(index, len(users)))
         
         self.traindataSize = self.traindataSize // 10
-        print("trainDataSize:", self.traindataSize)
         # self.traindataSize = 10000
         return posItems, negItems
-
-
 # if __name__ == "__main__":
 #     GPU = torch.cuda.is_available()
 #     device = torch.device('cuda' if GPU else "cpu")
