@@ -167,7 +167,6 @@ class KGAT(BertBaseModel):
                 all_emb = torch.cat([all_emb_neighbor.unsqueeze(-2), all_emb.unsqueeze(-2)], dim=-2).max(dim=-2).values
             elif self.config.kgat_merge == "mean":
                 all_emb = torch.cat([all_emb_neighbor.unsqueeze(-2), all_emb.unsqueeze(-2)], dim=-2).mean(dim=-2)
-
             embs.append(all_emb)
 
         embs = torch.stack(embs, dim=1)
@@ -249,15 +248,15 @@ class KGAT(BertBaseModel):
 
         # rel_emb = self.embedding_item(rel)
 
-        W_R_param = self.W_R_value[rel] #(bs, dim, dim)
-        # users_emb = torch.bmm(users_emb.unsqueeze(1), W_R_param).squeeze(1) #(bs, dim)
-        pos_emb = torch.bmm(pos_emb.unsqueeze(1), W_R_param).squeeze(1)
-        neg_emb = torch.bmm(neg_emb.unsqueeze(1), W_R_param).squeeze(1)
+        # W_R_param = self.W_R_value[rel] #(bs, dim, dim)
+        # # users_emb = torch.bmm(users_emb.unsqueeze(1), W_R_param).squeeze(1) #(bs, dim)
+        # pos_emb = torch.bmm(pos_emb.unsqueeze(1), W_R_param).squeeze(1)
+        # neg_emb = torch.bmm(neg_emb.unsqueeze(1), W_R_param).squeeze(1)
 
-        pos_scores = torch.mul(users_emb, (pos_emb)) #(bs, 1)
+        pos_scores = torch.mul(users_emb, pos_emb) #(bs, 1)
         # pos_scores = F.sigmoid(torch.sum(pos_scores, dim=1)) #(bs)
         pos_scores = torch.sum(pos_scores, dim=1) #(bs)
-        neg_scores = torch.mul(users_emb, (neg_emb))
+        neg_scores = torch.mul(users_emb, neg_emb)
         # neg_scores = F.sigmoid(torch.sum(neg_scores, dim=1)) #(bs)
         neg_scores = torch.sum(neg_scores, dim=1) #(bs)
         

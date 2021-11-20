@@ -11,7 +11,7 @@ import json
 import time
 
 from .base import AbstractTrainer
-from meantime.trainers.utils import UniformSample_original, timer, minibatch, shuffle, UniformSample_original_KGE, UniformSample_original_kgat_item2item
+from meantime.trainers.utils import UniformSample_original, timer, minibatch, shuffle, UniformSample_original_KGE
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -19,7 +19,7 @@ from tqdm import tqdm
 import pandas as pd
 import numpy as np
 from meantime.models.transformer_models.lightGCN import LightGCN
-from meantime.models.transformer_models.GraphGAT_i2i import KGAT
+from meantime.models.transformer_models.GraphGAT import KGAT
 
 from abc import *
 from pathlib import Path
@@ -28,7 +28,7 @@ import pdb
 # from meantime.dataloaders.graph import GraphLoader
 from meantime.dataloaders.graph_add_mi import GraphLoader
 # from meantime.dataloaders.graph_cate_brand import GraphLoaderCateBrand
-from meantime.dataloaders.graphGAT_i2i_loss import GraphLoader as GATLoader
+from meantime.dataloaders.graphGAT import GraphLoader as GATLoader
 # from meantime.dataloaders.graphGAT 
 
 class GraphTrainer(AbstractTrainer):
@@ -122,7 +122,7 @@ class GraphTrainer(AbstractTrainer):
     @classmethod
     def code(cls):
         # return 'graph_sasrec_improve_add_cate_brand'
-        return 'graph_sasrec_improve_lightgcn_kgat_i2i'
+        return 'graph_sasrec_improve_lightgcn_kgat_add_mi_add_regular'
 
     def add_extra_loggers(self):
         pass
@@ -138,9 +138,8 @@ class GraphTrainer(AbstractTrainer):
         # loss = loss.mean()
         # return loss
         d = self.model(batch)
-        # loss, loss_cnt = d['loss'], d['loss_cnt']
-        # loss = (loss * loss_cnt).sum() / loss_cnt.sum()
-        loss = d['loss']
+        loss, loss_cnt = d['loss'], d['loss_cnt']
+        loss = (loss * loss_cnt).sum() / loss_cnt.sum()
         return loss
 
     
@@ -179,32 +178,22 @@ class GraphTrainer(AbstractTrainer):
         # self.weight_decay = config['decay']
         self.weight_decay = self.args.weight_decay
         # self.lr = config['lr']
-
+        
         with timer(name="Sample"):
             # S = UniformSample_original(self.graph_loader_kgat)
-            S = UniformSample_original_kgat_item2item(self.graph_loader_kgat)
+            S = UniformSample_original_KGE(self.graph_loader_kgat)
             
         users = torch.Tensor(S[:, 0]).long()
         rels = torch.Tensor(S[:, 1]).long() #(len(train_items))
         posItems = torch.Tensor(S[:, 2]).long()
         negItems = torch.Tensor(S[:, 3]).long() #(len(train_items))
-
-        posUsers = torch.Tensor(S[:, 4]).long()
-        negUsers = torch.Tensor(S[:, 5]).long()
-        relUsers = torch.Tensor(S[:, 6]).long()
         
 
         users = users.to(self.args.device)
         rels = rels.to(self.args.device)
         posItems = posItems.to(self.args.device)
         negItems = negItems.to(self.args.device)
-
-        posUsers = posUsers.to(self.args.device)
-        negUsers = negUsers.to(self.args.device)
-        relUsers = relUsers.to(self.args.device)
-
-        users, rels, posItems, negItems, posUsers, negUsers, relUsers= shuffle(users, rels, posItems, negItems, posUsers, negUsers, relUsers)
-
+        users, rels, posItems, negItems = shuffle(users, rels, posItems, negItems)
         # total_batch = len(users) // world.config['bpr_batch_size'] + 1
         total_batch = len(users) // self.args.bpr_batch_size + 1
         aver_loss = 0.
@@ -213,22 +202,26 @@ class GraphTrainer(AbstractTrainer):
             (batch_users,
             batch_rels,
             batch_pos,
-            batch_neg,
-            batch_pos_user,
-            batch_neg_user,
-            batch_rel_user)) in enumerate(minibatch(users, rels, posItems, negItems, posUsers, negUsers, relUsers, batch_size=self.args.bpr_batch_size)):
+            batch_neg)) in enumerate(minibatch(users, rels, posItems, negItems, batch_size=self.args.bpr_batch_size)):
             # cri = bpr.stageOne(batch_users, batch_pos, batch_neg)
             # loss, reg_loss = self.model.bpr_loss(batch_users, batch_pos, batch_neg)
             loss, reg_loss = self.graph_model_kgat.bpr_loss(batch_users, batch_pos, batch_neg, batch_rels)
             reg_loss = reg_loss*self.weight_decay
-            loss_i2a = loss + reg_loss
+            loss = loss + reg_loss
 
-            #i2i loss
-            loss_i2i, reg_loss_i2i = self.graph_model_kgat.i2i_loss(batch_users, batch_pos_user, batch_neg_user, batch_rel_user)
+            in_item_rep, out_item_rep = self.graph_model.computer()
+            item_rep, attribute_rep = self.graph_model_kgat.computer()
 
-            # loss = 0.0 * loss_i2a + loss_i2i  #merge different loss;
-            loss = loss_i2i + self.weight_decay*reg_loss_i2i #merge different loss;
+            in_item_rep = in_item_rep[batch_users, :]
+            out_item_rep = out_item_rep[batch_users, :]
+            item_rep = item_rep[batch_users, :]
 
+            # pdb.set_trace()
+            regular_loss_v1 = self.loss_dependence_hisc(torch.cat([in_item_rep, item_rep], dim=-1), 2, self.args.hidden_units)
+            regular_loss_v2 = self.loss_dependence_hisc(torch.cat([out_item_rep, item_rep], dim=-1), 2, self.args.hidden_units)
+            regular_loss = regular_loss_v1[0] + regular_loss_v2[0]
+            loss += regular_loss * 0.1
+            # pdb.set_trace()
             optim_graph.zero_grad()
             loss.backward(retain_graph=True)
             optim_graph.step()
@@ -239,7 +232,6 @@ class GraphTrainer(AbstractTrainer):
         aver_loss = aver_loss / total_batch
         time_info = timer.dict()
         timer.zero()
-
 
         # add the KGE loss and update the adjacent matrix (TO DO)
         optim_graph_kge = optim_graph #同一个optim;
@@ -291,8 +283,7 @@ class GraphTrainer(AbstractTrainer):
             att = self.graph_model_kgat.updateAttentionScore()
             self.graph_model_kgat.Graph = att
 
-        return f"loss{aver_loss:.4f}-{time_info}" + "----------" + f"loss{tranR_aver_loss:.4f}-{tranR_time_info}" + "--------batch:{total_batch:.2f}"
-        # return f"loss{aver_loss:.4f}-{time_info}"
+        return f"loss{aver_loss:.4f}-{time_info}" + "----------" + f"loss{tranR_aver_loss:.4f}-{tranR_time_info}"
     
 
     # def trainGraphModelOneEpochCate(self, optim_graph):
@@ -344,7 +335,28 @@ class GraphTrainer(AbstractTrainer):
     #     timer.zero()
     #     return f"loss{aver_loss:.4f}-{time_info}"
 
+    def loss_dependence_hisc(self, zdata_trn, ncaps, nhidden):
+        loss_dep = torch.zeros(1).cuda()
+        hH = (-1/nhidden)*torch.ones(nhidden, nhidden).cuda() + torch.eye(nhidden).cuda()
+        kfactor = torch.zeros(ncaps, nhidden, nhidden).cuda()
 
+        for mm in range(ncaps):
+            data_temp = zdata_trn[:, mm * nhidden:(mm + 1) * nhidden]
+            kfactor[mm, :, :] = torch.mm(data_temp.t(), data_temp)
+
+        for mm in range(ncaps):
+            for mn in range(mm + 1, ncaps):
+                mat1 = torch.mm(hH, kfactor[mm, :, :])
+                mat2 = torch.mm(hH, kfactor[mn, :, :])
+                mat3 = torch.mm(mat1, mat2)
+                teststat = torch.trace(mat3) / zdata_trn.size(0)
+                # pdb.set_trace()
+                loss_dep = loss_dep + teststat
+        return loss_dep
+
+    
+
+    
     def trainGraphModelOneEpoch(self, optim_graph):
         # Recmodel = self.graph_model
         # Recmodel.train()
@@ -378,7 +390,17 @@ class GraphTrainer(AbstractTrainer):
             loss, reg_loss = self.graph_model.bpr_loss(batch_users, batch_pos, batch_neg)
             reg_loss = reg_loss*self.weight_decay
             loss = loss + reg_loss
+            # calculaute 
+            # in_item_rep, out_item_rep = self.graph_model.computer()
+            # item_rep, attribute_rep = self.graph_model_kgat.computer()
+            # in_item_rep = in_item_rep[batch_users, :]
+            # out_item_rep = out_item_rep[batch_users, :]
+            # item_rep = item_rep[batch_users, :]
+            # # pdb.set_trace()
+            # regular_loss = self.loss_dependence_hisc(torch.cat([in_item_rep, out_item_rep, item_rep], dim=-1), 3, self.args.hidden_units)
+            # loss += regular_loss[0] * 0.1
 
+            # pdb.set_trace()
             optim_graph.zero_grad()
             loss.backward(retain_graph=True)
             optim_graph.step()
@@ -410,8 +432,7 @@ class GraphTrainer(AbstractTrainer):
         for epoch in range(self.graph_epochs):
             info_train_loss = self.trainGraphModelOneEpoch(self.graph_opt)
             print("Both buy and view loss:", info_train_loss)
-
-        # 预预先cate_brand graph模型
+        # #预预先cate_brand graph模型
         for epoch in range(self.graph_attribute_epochs):
             # info_train_loss = self.trainGraphModelOneEpochCate(self.graph_opt_cate)
             info_train_loss = self.trainGraphModelOneEpochKGAT(self.graph_opt_attribute)
@@ -511,10 +532,9 @@ class GraphTrainer(AbstractTrainer):
             batch = {k:v.to(self.device) for k, v in batch.items()}
             # pdb.set_trace() # 参照原始bert模型构建输入数据, 随机mask任意的词, 注意此处没有特意去mask next item;
             num_instance += batch_size
-            # pdb.set_trace()
+
             self.optimizer.zero_grad()
             loss = self.calculate_loss(batch)
-            # pdb.set_trace()
             if isinstance(loss, tuple):
                 loss, extra_info = loss
                 for k, v in extra_info.items():

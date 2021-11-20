@@ -31,7 +31,7 @@ train_negative_sample_size: 1000 #sasrec负样本中1000中随机筛选一个;
 train_negative_sampling_seed: 42
 # test_negative_sampler_code: popular
 test_negative_sampler_code: random
-test_negative_sample_size: 99
+test_negative_sample_size: 100
 # test_negative_sampling_seed: 98765
 test_negative_sampling_seed: 42
 trainer_code: graph_sasrec_improve_kgat

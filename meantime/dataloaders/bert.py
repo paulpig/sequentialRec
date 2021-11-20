@@ -39,6 +39,8 @@ class BertTrainDataset(data_utils.Dataset):
         self.special_tokens = dataset['special_tokens']
         self.num_users = len(dataset['umap'])
         self.num_items = len(dataset['smap'])
+
+        # self.num_attributes = len(dataset['attribute2id'])
         self.rng = rng
         self.train_ranges = train_ranges
 

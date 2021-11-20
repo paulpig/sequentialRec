@@ -69,7 +69,7 @@ class AbstractDataset(metaclass=ABCMeta):
     def preprocess(self):
         dataset_path = self._get_preprocessed_dataset_path()
         # dataset_path = self._get_preprocessed_dataset_path_test()
-        if dataset_path.is_file():
+        if dataset_path.is_file() and self.args.skip_preprocess:
             print('Already preprocessed. Skip preprocessing')
             print(dataset_path)
             return
@@ -108,22 +108,57 @@ class AbstractDataset(metaclass=ABCMeta):
                     'num_days': num_days}
         
         #添加cate的数据;
-        if self.args.add_cate_flag:
-            item_id2cate_id = dict()
+        # if self.args.add_cate_flag:
+        #     item_id2cate_id = dict()
+        #     cate2id = dict()
+        #     train_file = self.args.graph_path + self.args.graph_filename
+        #     with open(train_file) as f:
+        #         for l in f.readlines():
+        #             if len(l) > 0:
+        #                 l = l.strip('\n').split(' ')
+        #                 items = [int(smap[i]) for i in l[1:]]
+        #                 #convert string to int
+        #                 if l[0] not in cate2id:
+        #                     cate2id[l[0]] = len(cate2id) + 1
+        #                 for item_id in items:
+        #                     item_id2cate_id[item_id] = cate2id[l[0]]
+        #     dataset['item_id2cate_id'] = item_id2cate_id
+        
+
+        #添加side information的数据;
+        if self.args.add_side_info_flag:
+            item_id2cate = dict()
+            item_id2price = dict()
+            item_id2brand = dict()
+            attribute2id = dict()
             cate2id = dict()
-            train_file = self.args.graph_path + self.args.graph_filename
+            train_file = self.args.graph_path + self.args.graph_filename_kgat
             with open(train_file) as f:
                 for l in f.readlines():
                     if len(l) > 0:
                         l = l.strip('\n').split(' ')
-                        items = [int(smap[i]) for i in l[1:]]
-                        #convert string to int
-                        if l[0] not in cate2id:
-                            cate2id[l[0]] = len(cate2id) + 1
-                        for item_id in items:
-                            item_id2cate_id[item_id] = cate2id[l[0]]
-            dataset['item_id2cate_id'] = item_id2cate_id
-            
+                        # items = [int(smap[i]) for i in l[1:]]
+                        # #convert string to int
+                        # if l[0] not in cate2id:
+                        #     cate2id[l[0]] = len(cate2id) + 1
+                        # for item_id in items:
+                        #     item_id2cate_id[item_id] = cate2id[l[0]]
+                        rel = l[1]
+                        item = l[0]
+                        attribute = l[2]
+
+                        if attribute not in attribute2id:
+                            attribute2id[attribute] = len(attribute2id) + 1 #for padding
+                        
+                        if rel == "brand-rel":
+                            item_id2brand[int(smap[item])] = attribute2id[attribute]
+                        if rel == "price-rel":
+                            item_id2price[int(smap[item])] = attribute2id[attribute]
+                        if rel == "categories-rel":
+                            item_id2cate[int(smap[item])] = attribute2id[attribute]
+            attribute2id["None"] = len(attribute2id) + 1       
+            dataset['item_id2side_id_tripe'] = [item_id2cate, item_id2price, item_id2brand]
+            dataset['attribute2id'] = attribute2id
 
         with dataset_path.open('wb') as f:
             pickle.dump(dataset, f)

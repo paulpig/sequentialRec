@@ -36,7 +36,8 @@ class AbstractDataloader(metaclass=ABCMeta):
         if args.add_cate_flag:
             # pdb.set_trace()
             self.item_id2cate_id = self.dataset['item_id2cate_id']
-
+        if args.add_side_info_flag:
+            args.num_attributes = len(self.dataset["attribute2id"])
         code = args.train_negative_sampler_code
         # if args.trainer_code == 'sas': #在整个数据集中采用负样本;
         #     # pdb.set_trace()
