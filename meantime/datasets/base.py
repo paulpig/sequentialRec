@@ -156,7 +156,7 @@ class AbstractDataset(metaclass=ABCMeta):
                             item_id2price[int(smap[item])] = attribute2id[attribute]
                         if rel == "categories-rel":
                             item_id2cate[int(smap[item])] = attribute2id[attribute]
-            attribute2id["None"] = len(attribute2id) + 1       
+            attribute2id["None"] =  len(attribute2id) + 1       
             dataset['item_id2side_id_tripe'] = [item_id2cate, item_id2price, item_id2brand]
             dataset['attribute2id'] = attribute2id
 

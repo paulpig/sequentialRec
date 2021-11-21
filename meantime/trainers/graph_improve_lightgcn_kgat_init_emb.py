@@ -18,15 +18,14 @@ import torch.optim as optim
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
-from meantime.models.transformer_models.lightGCN_add_regular import LightGCN
+from meantime.models.transformer_models.lightGCN import LightGCN
 from meantime.models.transformer_models.GraphGAT import KGAT
 
 from abc import *
 from pathlib import Path
 import os
 import pdb
-# from meantime.dataloaders.graph import GraphLoader
-from meantime.dataloaders.graph_add_mi import GraphLoader
+from meantime.dataloaders.graph import GraphLoader
 # from meantime.dataloaders.graph_cate_brand import GraphLoaderCateBrand
 from meantime.dataloaders.graphGAT import GraphLoader as GATLoader
 # from meantime.dataloaders.graphGAT 
@@ -122,7 +121,7 @@ class GraphTrainer(AbstractTrainer):
     @classmethod
     def code(cls):
         # return 'graph_sasrec_improve_add_cate_brand'
-        return 'graph_sasrec_improve_lightgcn_kgat_add_mi_add_regular'
+        return 'graph_sasrec_improve_lightgcn_kgat_init_both_emb'
 
     def add_extra_loggers(self):
         pass
@@ -209,19 +208,6 @@ class GraphTrainer(AbstractTrainer):
             reg_loss = reg_loss*self.weight_decay
             loss = loss + reg_loss
 
-            # in_item_rep, out_item_rep = self.graph_model.computer()
-            # item_rep, attribute_rep = self.graph_model_kgat.computer()
-
-            # in_item_rep = in_item_rep[batch_users, :]
-            # out_item_rep = out_item_rep[batch_users, :]
-            # item_rep = item_rep[batch_users, :]
-
-            # # pdb.set_trace()
-            # regular_loss_v1 = self.loss_dependence_hisc(torch.cat([in_item_rep, item_rep], dim=-1), 2, self.args.hidden_units)
-            # regular_loss_v2 = self.loss_dependence_hisc(torch.cat([out_item_rep, item_rep], dim=-1), 2, self.args.hidden_units)
-            # regular_loss = regular_loss_v1[0] + regular_loss_v2[0]
-            # loss += regular_loss * 0.1
-            # pdb.set_trace()
             optim_graph.zero_grad()
             loss.backward(retain_graph=True)
             optim_graph.step()
@@ -335,28 +321,7 @@ class GraphTrainer(AbstractTrainer):
     #     timer.zero()
     #     return f"loss{aver_loss:.4f}-{time_info}"
 
-    def loss_dependence_hisc(self, zdata_trn, ncaps, nhidden):
-        loss_dep = torch.zeros(1).cuda()
-        hH = (-1/nhidden)*torch.ones(nhidden, nhidden).cuda() + torch.eye(nhidden).cuda()
-        kfactor = torch.zeros(ncaps, nhidden, nhidden).cuda()
 
-        for mm in range(ncaps):
-            data_temp = zdata_trn[:, mm * nhidden:(mm + 1) * nhidden]
-            kfactor[mm, :, :] = torch.mm(data_temp.t(), data_temp)
-
-        for mm in range(ncaps):
-            for mn in range(mm + 1, ncaps):
-                mat1 = torch.mm(hH, kfactor[mm, :, :])
-                mat2 = torch.mm(hH, kfactor[mn, :, :])
-                mat3 = torch.mm(mat1, mat2)
-                teststat = torch.trace(mat3) / zdata_trn.size(0)
-                # pdb.set_trace()
-                loss_dep = loss_dep + teststat
-        return loss_dep
-
-    
-
-    
     def trainGraphModelOneEpoch(self, optim_graph):
         # Recmodel = self.graph_model
         # Recmodel.train()
@@ -380,7 +345,6 @@ class GraphTrainer(AbstractTrainer):
         # total_batch = len(users) // world.config['bpr_batch_size'] + 1
         total_batch = len(users) // self.args.bpr_batch_size + 1
         aver_loss = 0.
-        avar_regular_loss = 0.
         # pdb.set_trace()
         for (batch_i,
             (batch_users,
@@ -392,34 +356,17 @@ class GraphTrainer(AbstractTrainer):
             reg_loss = reg_loss*self.weight_decay
             loss = loss + reg_loss
 
-
-            regular_loss = self.graph_model.regular_loss(batch_users, batch_pos, batch_neg)
-            # calculaute 
-            # in_item_rep, out_item_rep = self.graph_model.computer()
-            # item_rep, attribute_rep = self.graph_model_kgat.computer()
-            # in_item_rep = in_item_rep[batch_users, :]
-            # out_item_rep = out_item_rep[batch_users, :]
-            # item_rep = item_rep[batch_users, :]
-            # # pdb.set_trace()
-            # regular_loss = self.loss_dependence_hisc(torch.cat([in_item_rep, out_item_rep, item_rep], dim=-1), 3, self.args.hidden_units)
-            # loss += regular_loss[0] * 0.1
-            loss += regular_loss[0]
-
-            # pdb.set_trace()
             optim_graph.zero_grad()
             loss.backward(retain_graph=True)
             optim_graph.step()
             cri = loss.cpu().item()
-            cri_regular = regular_loss[0].cpu().item()
             aver_loss += cri
-            avar_regular_loss += cri_regular
             # if world.tensorboard:
             #     w.add_scalar(f'BPRLoss/BPR', cri, epoch * int(len(users) / world.config['bpr_batch_size']) + batch_i)
         aver_loss = aver_loss / total_batch
-        avar_regular_loss = avar_regular_loss / total_batch
         time_info = timer.dict()
         timer.zero()
-        return f"loss{aver_loss:.4f}-{time_info}" + "--------------" + f"loss{avar_regular_loss:.4f}-{time_info}"
+        return f"loss{aver_loss:.4f}-{time_info}"
     
 
     def train(self):
@@ -440,7 +387,8 @@ class GraphTrainer(AbstractTrainer):
         for epoch in range(self.graph_epochs):
             info_train_loss = self.trainGraphModelOneEpoch(self.graph_opt)
             print("Both buy and view loss:", info_train_loss)
-        # #预预先cate_brand graph模型
+
+        #预预先cate_brand graph模型
         for epoch in range(self.graph_attribute_epochs):
             # info_train_loss = self.trainGraphModelOneEpochCate(self.graph_opt_cate)
             info_train_loss = self.trainGraphModelOneEpochKGAT(self.graph_opt_attribute)
@@ -458,7 +406,10 @@ class GraphTrainer(AbstractTrainer):
         self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_kgat.getUserItemEmb()
 
         #setting representations to sequential models; 由于user embedding不参与模型, 两个输出的均是item表征;
-        self.model.setUserItemRepFromGraph(self.user_hidden_rep, self.item_hidden_rep, self.user_hidden_rep_cate, self.item_hidden_rep_cate) #每次加载相同的hidden representatin, 不合理;
+        # self.model.setUserItemRepFromGraph(self.user_hidden_rep, self.item_hidden_rep, self.user_hidden_rep_cate, self.item_hidden_rep_cate) #每次加载相同的hidden representatin, 不合理;
+        # self.model.setUserItemRepFromGraphKGAT(self.user_hidden_rep, self.item_hidden_rep, self.user_hidden_rep_cate, self.item_hidden_rep_cate) #每次加载相同的hidden representatin, 不合理;
+        self.model.setUserItemRepFromGraphLightGCN(self.user_hidden_rep, self.item_hidden_rep, self.user_hidden_rep_cate, self.item_hidden_rep_cate) #每次加载相同的hidden representatin, 不合理;
+
         
         print("Finish setting user embeddings and item embeddings;")
 
@@ -534,7 +485,7 @@ class GraphTrainer(AbstractTrainer):
             # self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_cate.getUserItemEmb()
             self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_kgat.getUserItemEmb()
             #setting representations to sequential models; 由于user embedding不参与模型, 两个输出的均是item表征;
-            self.model.setUserItemRepFromGraph(self.user_hidden_rep, self.item_hidden_rep, self.user_hidden_rep_cate, self.item_hidden_rep_cate) #每次加载相同的hidden representatin, 不合理;
+            self.model.setUserItemRepFromGraphLightGCN(self.user_hidden_rep, self.item_hidden_rep, self.user_hidden_rep_cate, self.item_hidden_rep_cate) #每次加载相同的hidden representatin, 不合理;
 
             batch_size = next(iter(batch.values())).size(0)
             batch = {k:v.to(self.device) for k, v in batch.items()}
@@ -622,12 +573,12 @@ class GraphTrainer(AbstractTrainer):
             train_type = 'finetune'
 
 
-        self.user_hidden_rep, self.item_hidden_rep = self.graph_model.getUserItemEmb()
-        # self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_cate.getUserItemEmb()
-        self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_kgat.getUserItemEmb()
+        # self.user_hidden_rep, self.item_hidden_rep = self.graph_model.getUserItemEmb()
+        # # self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_cate.getUserItemEmb()
+        # self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_kgat.getUserItemEmb()
 
-        #setting representations to sequential models; 由于user embedding不参与模型, 两个输出的均是item表征;
-        self.model.setUserItemRepFromGraph(self.user_hidden_rep, self.item_hidden_rep, self.user_hidden_rep_cate, self.item_hidden_rep_cate) #每次加载相同的hidden representatin, 不合理;
+        # #setting representations to sequential models; 由于user embedding不参与模型, 两个输出的均是item表征;
+        # self.model.setUserItemRepFromGraph(self.user_hidden_rep, self.item_hidden_rep, self.user_hidden_rep_cate, self.item_hidden_rep_cate) #每次加载相同的hidden representatin, 不合理;
 
 
         with torch.no_grad():

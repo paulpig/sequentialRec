@@ -93,7 +93,7 @@ experiment_group: test
 # experiment_name: sas_v2
 # experiment_name: bert_beauty_bert_baseline_argument_occurrence_graph_improve_add_pretrain
 # experiment_name: bert_beauty_bert_baseline_argument_occurrence_graph_improve_add_pretrain_ablation
-experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_graph_finetune_sasrec_single_rep_kgat_vvv
+experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_graph_finetune_sasrec_single_rep_kgat_result
 # experiment_name: 5_core_both_view_buy_no_pretrain_graph_finetune_sasrec
 # experiment_name: bert_beauty_bert_baseline_argument_test_v6
 # experiment_name: bert_beauty_bert_baseline_argument
@@ -121,16 +121,17 @@ pooling_type: None
 # graph_epochs: 10
 # graph_epochs: 20
 # graph_epochs: 20
-graph_epochs: 40
+graph_epochs: 20
 # graph_epochs: 1
 bpr_batch_size: 2048
 add_graph_flag: true
 gru_layer_number: 2
 add_cate_flag: false
 kg_l2loss_lambda: 0.00001
-kgat_merge: lightgcn
+# kgat_merge: lightgcn
+kgat_merge: bilinear
 # kgat_output: emb
 kgat_output: hidden
-skip_preprocess: true
+skip_preprocess: false
 sparsity_ratio: 1.0
 add_side_info_flag: false

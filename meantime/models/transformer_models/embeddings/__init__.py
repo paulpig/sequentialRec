@@ -18,14 +18,16 @@ class TokenEmbedding(nn.Module):
 class TokenEmbeddingDirect(nn.Module):
     def __init__(self, args):
         super().__init__()
-        # vocab_size = args.num_items + 2
-        vocab_size = args.num_items + 3 ##for the 'cls' token
+        vocab_size = args.num_items + 1
+        # vocab_size = args.num_items + 3 ##for the 'cls' token
         hidden = args.hidden_units
         self.emb = nn.Embedding(vocab_size, hidden, padding_idx=0)
 
     def forward(self, x):
         return self.emb(x)  # B x T x H
-
+    # def forward(self, d, keyword='tokens'):
+    #     x = d[keyword]  # B x T
+    #     return self.emb(x)  # B x T x H
 
 class ConstantEmbedding(nn.Module):
     def __init__(self, args):
