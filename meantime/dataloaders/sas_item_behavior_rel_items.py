@@ -1,7 +1,9 @@
+from os import replace
 from .base import AbstractDataloader
 from .bert import BertTrainDataset, BertEvalDataset
 import pdb
 import torch
+import numpy as np
 
 
 class SasDataloader(AbstractDataloader):
@@ -27,7 +29,7 @@ class SasDataloader(AbstractDataloader):
 
     @classmethod
     def code(cls):
-        return 'sas_side_info'
+        return 'sas_behavior_rel'
 
     def _get_dataset(self, mode):
         if mode == 'train':
@@ -51,6 +53,7 @@ class SasDataloader(AbstractDataloader):
 class SasTrainDataset(BertTrainDataset):
     def __init__(self, args, dataset, negative_samples, rng, train_ranges, sas_timestamps):
         super().__init__(args, dataset, negative_samples, rng, train_ranges)
+        self.args = args
         self.timestamps = sas_timestamps
         self.marank_mode = args.model_code in ['marank']
         self.marank_max_len = args.marank_max_len  # actual max_len if marank_mode=True
@@ -58,13 +61,14 @@ class SasTrainDataset(BertTrainDataset):
         self.item_count = len(dataset['smap'])
         self.item2id = dataset['smap']
         # pdb.set_trace()
-        self.attribute_count = len(dataset["attribute2id"])
+        # self.attribute_count = len(dataset["attribute2id"])
         # self.id2item = dict([(value, key) for key, value in self.item2id.items()])
         # self.id2attri = dict([(value, key) for key, value in dataset["attribute2id"].items()])
         # self.item2cate = item2cate
         # self.cate2id = cate2id  11149:2098
         # self.item_id2cate_id = dict((self.item2id[key], self.cate2id[value]) for key, value in self.item2cate.items())
-        self.item_id2cate_id, self.item_id2brand_id, self.item_id2price_id = dataset['item_id2side_id_tripe'] #item_id to cate_id;
+        # self.item_id2cate_id, self.item_id2brand_id, self.item_id2price_id = dataset['item_id2side_id_tripe'] #item_id to cate_id;
+        self.item2relItemList = dataset['item2relItemList']
         # pdb.set_trace()
         if self.marank_mode:
             self.user2pos = {user:pos for user, pos in self.train_ranges}
@@ -79,6 +83,13 @@ class SasTrainDataset(BertTrainDataset):
         while item in item_set: 
             item = random.randint(1, item_size-1) 
         return item
+
+    def sample_behavior_items(self, item_set, sample_num):
+        import numpy as np
+        if len(item_set)<= sample_num:
+            return item_set
+        else:
+            return np.random.choice(item_set, sample_num, replace=False).tolist()
 
     def __getitem__(self, index):
         user, offset = self.index2user_and_offsets[index]
@@ -108,39 +119,29 @@ class SasTrainDataset(BertTrainDataset):
             # negative_labels = [self.sample_negative_items(seq, self.item_count) for _ in labels] #将valid item和test item选入到negative items;
             negative_labels = [self.rng.choice(neg_samples) for _ in labels]
 
-            #添加cate_id作为side information;
-            pos_cates = [self.item_id2cate_id[value] if value in self.item_id2cate_id else self.attribute_count for value in tokens]
-            pos_cates = [0] * padding_len + pos_cates
-
-            pos_brands = [self.item_id2brand_id[value] if value in self.item_id2brand_id else self.attribute_count +1 for value in tokens]
-            pos_brands = [0] * padding_len + pos_brands
-
-            pos_prices = [self.item_id2price_id[value] if value in self.item_id2price_id else self.attribute_count+2 for value in tokens]
-            pos_prices = [0] * padding_len + pos_prices
-
+            # sample behavior-based rel items
+            sample_num = self.args.sample_num
+            behavior_rel_items = []
+            avg_rel_len_result = 0
+            avg_rel_len_tmp = []
+            for item_anchor in tokens:
+                item_rels = []
+                if item_anchor in self.item2relItemList:
+                    # sample item
+                    avg_rel_len_tmp.append(len(self.item2relItemList[item_anchor]))
+                    item_rels = self.sample_behavior_items(self.item2relItemList[item_anchor], sample_num)
+                else:
+                    avg_rel_len_tmp.append(0)
+                
+                rel_item_padding_len = sample_num - len(item_rels)
+                # pdb.set_trace()
+                rel_items = [0] * rel_item_padding_len + item_rels
+                behavior_rel_items.append(rel_items)
+            
+            # avg_rel_len_result = sum(avg_rel_len_tmp) *1.0 / len(tokens)
             # pdb.set_trace()
-            #添加cate_id作为side information;
-            label_cates = [self.item_id2cate_id[value] if value in self.item_id2cate_id else self.attribute_count for value in labels ]
-            label_cates = [0] * padding_len + label_cates
-
-            label_brands = [self.item_id2brand_id[value] if value in self.item_id2brand_id else self.attribute_count+1 for value in labels]
-            label_brands = [0] * padding_len + label_brands
-
-            label_prices = [self.item_id2price_id[value] if value in self.item_id2price_id else self.attribute_count+2 for value in labels]
-            label_prices = [0] * padding_len + label_prices
-
-
-            #添加cate_id作为side information;
-            neg_cates = [self.item_id2cate_id[value] if value in self.item_id2cate_id else self.attribute_count for value in negative_labels]
-            neg_cates = [0] * padding_len + neg_cates
-
-            neg_brands = [self.item_id2brand_id[value] if value in self.item_id2brand_id else self.attribute_count+1 for value in negative_labels]
-            neg_brands = [0] * padding_len + neg_brands
-
-            neg_prices = [self.item_id2price_id[value] if value in self.item_id2price_id else self.attribute_count+2 for value in negative_labels]
-            neg_prices = [0] * padding_len + neg_prices
-
-
+            behavior_rel_items = [[0 for _ in range(sample_num)] for _ in range(padding_len)] + behavior_rel_items
+            # pdb.set_trace()
             tokens = [0] * padding_len + tokens
             labels = [0] * padding_len + labels
             negative_labels = [0] * padding_len + negative_labels
@@ -152,17 +153,7 @@ class SasTrainDataset(BertTrainDataset):
             'tokens': torch.LongTensor(tokens),
             'labels': torch.LongTensor(labels),
             'negative_labels': torch.LongTensor(negative_labels),
-            'seq_cates': torch.LongTensor(pos_cates),
-            'seq_brands': torch.LongTensor(pos_brands),
-            'seq_prices': torch.LongTensor(pos_prices),
-
-            'label_cates': torch.LongTensor(label_cates),
-            'label_brands': torch.LongTensor(label_brands),
-            'label_prices': torch.LongTensor(label_prices),
-
-            'neg_cates': torch.LongTensor(neg_cates),
-            'neg_brands': torch.LongTensor(neg_brands),
-            'neg_prices': torch.LongTensor(neg_prices),
+            'behavior_rel_items': torch.LongTensor(behavior_rel_items),
         }
         if self.output_timestamps:
             timestamps = self.timestamps[user][beg:end-1]
@@ -176,16 +167,23 @@ class SasTrainDataset(BertTrainDataset):
 class SasEvalDataset(BertEvalDataset):
     def __init__(self, args, dataset, negative_samples, positions, sas_timestamps):
         super().__init__(args, dataset, negative_samples, positions)
+        self.args = args
         self.timestamps = sas_timestamps
         self.output_user = args.dataloader_output_user
         self.marank_mode = args.model_code in ['marank']
         self.marank_max_len = args.marank_max_len
         item2id = dataset['smap']
-        self.attribute_count = len(dataset["attribute2id"])
+        # self.attribute_count = len(dataset["attribute2id"])
         # self.item_id2cate_id = dict((item2id[key], cate2id[value]) for key, value in item2cate.items())
         # self.item_id2cate_id = item_id2cate_id
-        self.item_id2cate_id, self.item_id2brand_id, self.item_id2price_id = dataset['item_id2side_id_tripe'] #item_id to cate_id;
-
+        # self.item_id2cate_id, self.item_id2brand_id, self.item_id2price_id = dataset['item_id2side_id_tripe'] #item_id to cate_id;
+        self.item2relItemList = dataset['item2relItemList']
+    def sample_behavior_items(self, item_set, sample_num):
+        import numpy as np
+        if len(item_set)<= sample_num:
+            return item_set
+        else:
+            return np.random.choice(item_set, sample_num, replace=False).tolist()
     
     def __getitem__(self, index):
         user, pos = self.positions[index]
@@ -216,34 +214,42 @@ class SasEvalDataset(BertEvalDataset):
             #添加cate_id作为side information;
             # cates = [self.item_id2cate_id[value] for value in seq]
             # cates = [0] * padding_len + cates
-            cates = [self.item_id2cate_id[value] if value in self.item_id2cate_id else self.attribute_count for value in seq]
-            cates = [0] * padding_len + cates
-
-            brands = [self.item_id2brand_id[value] if value in self.item_id2brand_id else self.attribute_count+1 for value in seq]
-            brands = [0] * padding_len + brands
-
-            prices = [self.item_id2price_id[value] if value in self.item_id2price_id else self.attribute_count+2 for value in seq]
-            prices = [0] * padding_len + prices
+            # sample behavior-based rel items
+            tokens = seq
+            sample_num = self.args.sample_num
+            behavior_rel_items = []
+            avg_rel_len_result = 0
+            avg_rel_len_tmp = []
+            for item_anchor in tokens:
+                item_rels = []
+                if item_anchor in self.item2relItemList:
+                    # sample item
+                    avg_rel_len_tmp.append(len(self.item2relItemList[item_anchor]))
+                    item_rels = self.sample_behavior_items(self.item2relItemList[item_anchor], sample_num)
+                else:
+                    avg_rel_len_tmp.append(0)
+                
+                rel_item_padding_len = sample_num - len(item_rels)
+                # pdb.set_trace()
+                rel_items = [0] * rel_item_padding_len + item_rels
+                behavior_rel_items.append(rel_items)
+            
+            # avg_rel_len_result = sum(avg_rel_len_tmp) *1.0 / len(tokens)
+            # behavior_rel_items = [[0 for _ in len(sample_num)] for _ in padding_len] + behavior_rel_items
+            behavior_rel_items = [[0 for _ in range(sample_num)] for _ in range(padding_len)] + behavior_rel_items
 
             seq = [0] * padding_len + seq
 
-        candidate_cates = [self.item_id2cate_id[value] if value in self.item_id2cate_id else self.attribute_count for value in candidates]
-        candidate_brands = [self.item_id2brand_id[value] if value in self.item_id2brand_id else self.attribute_count + 1 for value in candidates]
-        candidate_prices = [self.item_id2price_id[value] if value in self.item_id2price_id else self.attribute_count + 2 for value in candidates]
+        # candidate_cates = [self.item_id2cate_id[value] if value in self.item_id2cate_id else self.attribute_count for value in candidates]
+        # candidate_brands = [self.item_id2brand_id[value] if value in self.item_id2brand_id else self.attribute_count + 1 for value in candidates]
+        # candidate_prices = [self.item_id2price_id[value] if value in self.item_id2price_id else self.attribute_count + 2 for value in candidates]
 
         tokens = torch.LongTensor(seq)
         candidates = torch.LongTensor(candidates)
         labels = torch.LongTensor(labels)
-        cates = torch.LongTensor(cates)
-        brands = torch.LongTensor(brands)
-        prices = torch.LongTensor(prices)
+        behavior_rel_items = torch.LongTensor(behavior_rel_items)
 
-        candidate_cates = torch.LongTensor(candidate_cates)
-        candidate_brands = torch.LongTensor(candidate_brands)
-        candidate_prices = torch.LongTensor(candidate_prices)
-
-        d = {'tokens':tokens, 'candidates':candidates, 'labels':labels, 'seq_cates': cates, 'seq_brands': brands, 'seq_prices':prices, 
-        'candidate_cates': candidate_cates, 'candidate_brands': candidate_brands, 'candidate_prices':candidate_prices}
+        d = {'tokens':tokens, 'candidates':candidates, 'labels':labels, 'behavior_rel_items': behavior_rel_items}
         if self.output_timestamps:
             timestamps = self.timestamps[user][beg:end]
             timestamps = [0] * padding_len + timestamps

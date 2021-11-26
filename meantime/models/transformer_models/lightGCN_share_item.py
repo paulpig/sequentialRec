@@ -27,8 +27,10 @@ class LightGCN(BertBaseModel):
         self.A_split = self.config.A_split
         self.embedding_user = torch.nn.Embedding(
             num_embeddings=self.num_users, embedding_dim=self.latent_dim)
-        self.embedding_item = torch.nn.Embedding(
-            num_embeddings=self.num_items, embedding_dim=self.latent_dim)
+        # self.embedding_item = torch.nn.Embedding(
+        #     num_embeddings=self.num_items, embedding_dim=self.latent_dim)
+
+        self.embedding_item = self.embedding_user
         # if self.config['pretrain'] == 0:
         if self.config.graph_pretrain == False:
 #             nn.init.xavier_uniform_(self.embedding_user.weight, gain=1)
@@ -36,12 +38,12 @@ class LightGCN(BertBaseModel):
 #             print('use xavier initilizer')
 # random normal init seems to be a better choice when lightGCN actually don't use any non-linear activation function
             nn.init.normal_(self.embedding_user.weight, std=0.1)
-            nn.init.normal_(self.embedding_item.weight, std=0.1)
+            # nn.init.normal_(self.embedding_item.weight, std=0.1)
             # world.cprint('use NORMAL distribution initilizer')
         else:
             #暂时不pretrain, 之后可考虑pretrain;
             self.embedding_user.weight.data.copy_(torch.from_numpy(self.config['user_emb']))
-            self.embedding_item.weight.data.copy_(torch.from_numpy(self.config['item_emb']))
+            # self.embedding_item.weight.data.copy_(torch.from_numpy(self.config['item_emb']))
             print('use pretarined data')
         self.f = nn.Sigmoid()
         self.Graph = self.dataset.getSparseGraph()

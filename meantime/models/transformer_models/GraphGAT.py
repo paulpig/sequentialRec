@@ -234,6 +234,14 @@ class KGAT(BertBaseModel):
             
         return all_users, all_items
 
+    
+    def getUserItemEmbOri(self):
+        # all_users, all_items = self.computer()
+        all_users = self.embedding_user.weight
+        all_items = self.embedding_item.weight
+            
+        return all_users, all_items
+
 
     #=====================KGE loss =================================
 

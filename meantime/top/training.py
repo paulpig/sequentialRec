@@ -3,9 +3,11 @@ from meantime.dataloaders import dataloader_factory
 from meantime.trainers import trainer_factory
 from meantime.utils import *
 from meantime.config import *
+import pdb
 
 
 def main(args):
+    # pdb.set_trace()
     if args.mode == 'train':
         train(args)
     elif args.mode == 'validate':

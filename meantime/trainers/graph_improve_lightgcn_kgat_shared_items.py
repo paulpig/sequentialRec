@@ -18,7 +18,7 @@ import torch.optim as optim
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
-from meantime.models.transformer_models.lightGCN import LightGCN
+from meantime.models.transformer_models.lightGCN_share_item import LightGCN
 from meantime.models.transformer_models.GraphGAT import KGAT
 
 from abc import *
@@ -121,7 +121,7 @@ class GraphTrainer(AbstractTrainer):
     @classmethod
     def code(cls):
         # return 'graph_sasrec_improve_add_cate_brand'
-        return 'graph_sasrec_improve_lightgcn_kgat_init_both_emb'
+        return 'graph_sasrec_improve_lightgcn_kgat_shared_items'
 
     def add_extra_loggers(self):
         pass
@@ -406,10 +406,7 @@ class GraphTrainer(AbstractTrainer):
         self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_kgat.getUserItemEmb()
 
         #setting representations to sequential models; 由于user embedding不参与模型, 两个输出的均是item表征;
-        # self.model.setUserItemRepFromGraph(self.user_hidden_rep, self.item_hidden_rep, self.user_hidden_rep_cate, self.item_hidden_rep_cate) #每次加载相同的hidden representatin, 不合理;
-        self.model.setUserItemRepFromGraphKGAT(self.user_hidden_rep, self.item_hidden_rep, self.user_hidden_rep_cate, self.item_hidden_rep_cate) #每次加载相同的hidden representatin, 不合理;
-        self.model.setUserItemRepFromGraphLightGCN(self.user_hidden_rep, self.item_hidden_rep, self.user_hidden_rep_cate, self.item_hidden_rep_cate) #每次加载相同的hidden representatin, 不合理;
-
+        self.model.setUserItemRepFromGraph(self.user_hidden_rep, self.item_hidden_rep, self.user_hidden_rep_cate, self.item_hidden_rep_cate) #每次加载相同的hidden representatin, 不合理;
         
         print("Finish setting user embeddings and item embeddings;")
 
@@ -485,7 +482,7 @@ class GraphTrainer(AbstractTrainer):
             # self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_cate.getUserItemEmb()
             self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_kgat.getUserItemEmb()
             #setting representations to sequential models; 由于user embedding不参与模型, 两个输出的均是item表征;
-            self.model.setUserItemRepFromGraphLightGCN(self.user_hidden_rep, self.item_hidden_rep, self.user_hidden_rep_cate, self.item_hidden_rep_cate) #每次加载相同的hidden representatin, 不合理;
+            self.model.setUserItemRepFromGraph(self.user_hidden_rep, self.item_hidden_rep, self.user_hidden_rep_cate, self.item_hidden_rep_cate) #每次加载相同的hidden representatin, 不合理;
 
             batch_size = next(iter(batch.values())).size(0)
             batch = {k:v.to(self.device) for k, v in batch.items()}
@@ -573,12 +570,12 @@ class GraphTrainer(AbstractTrainer):
             train_type = 'finetune'
 
 
-        # self.user_hidden_rep, self.item_hidden_rep = self.graph_model.getUserItemEmb()
-        # # self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_cate.getUserItemEmb()
-        # self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_kgat.getUserItemEmb()
+        self.user_hidden_rep, self.item_hidden_rep = self.graph_model.getUserItemEmb()
+        # self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_cate.getUserItemEmb()
+        self.user_hidden_rep_cate, self.item_hidden_rep_cate = self.graph_model_kgat.getUserItemEmb()
 
-        # #setting representations to sequential models; 由于user embedding不参与模型, 两个输出的均是item表征;
-        # self.model.setUserItemRepFromGraph(self.user_hidden_rep, self.item_hidden_rep, self.user_hidden_rep_cate, self.item_hidden_rep_cate) #每次加载相同的hidden representatin, 不合理;
+        #setting representations to sequential models; 由于user embedding不参与模型, 两个输出的均是item表征;
+        self.model.setUserItemRepFromGraph(self.user_hidden_rep, self.item_hidden_rep, self.user_hidden_rep_cate, self.item_hidden_rep_cate) #每次加载相同的hidden representatin, 不合理;
 
 
         with torch.no_grad():

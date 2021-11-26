@@ -47,26 +47,12 @@ class GraphLoader():
         # train_file = path + '/rm_2_low_items_cocurrence_correct_rm_valid.txt' #未保证target item没有提前泄露;
         # train_file = path + '/rm_5_low_items_cocurrence_correct_rm_valid.txt' #未保证target item没有提前泄露;
         train_file = path + config.graph_filename
-        train_file_mi = path + config.graph_mi_filename
-
-
-        item_pair_mi_score = {}
-        with open(train_file_mi) as f:
-            for l in f.readlines():
-                if len(l) > 0:
-                    l = l.strip('\n').split(' ')
-                    item_start = l[0]
-                    item_end = l[1]
-                    mi_weight = l[2]
-                    item_pair_mi_score[(item_start, item_end)] = float(mi_weight)
-                    
         
         print("Loading datafile is: ", train_file)
         # train_file = path
         # test_file = path + '/test.txt' #不需要测试集, 在整个数据集中pretrain来获取每个item的表征;
         self.path = path
         trainUniqueUsers, trainItem, trainUser = [], [], []
-        trainMiWeight = []
         # testUniqueUsers, testItem, testUser = [], [], []
         self.traindataSize = 0
         self.testDataSize = 0
@@ -91,14 +77,6 @@ class GraphLoader():
                     trainUniqueUsers.append(uid)
                     trainUser.extend([uid] * len(items))
                     trainItem.extend(items)
-                    # add mi weight
-                    for m_item in l[1:]:
-                        # if l[0] != m_item and (l[0], m_item) in item_pair_mi_score and item_pair_mi_score[(l[0], m_item)] > 1.0:
-                        if l[0] != m_item and (l[0], m_item) in item_pair_mi_score and item_pair_mi_score[(l[0], m_item)] > 1.0:
-                            trainMiWeight.append(item_pair_mi_score[(l[0], m_item)])
-                        else:
-                            trainMiWeight.append(1.0)
-                            
                     self.m_item = max(self.m_item, max(items))
                     self.n_user = max(self.n_user, uid)
                     self.traindataSize += len(items)
@@ -125,10 +103,7 @@ class GraphLoader():
         print(f"Graph Sparsity: {(self.trainDataSize) / self.n_users / self.m_items}")
 
         # (users,items), bipartite graph
-        # self.UserItemNet = csr_matrix((np.ones(len(self.trainUser)), (self.trainUser, self.trainItem)),
-        #                               shape=(self.n_user, self.m_item)) #第一参数: value, 第二个采纳数: index;
-        # pdb.set_trace()
-        self.UserItemNet = csr_matrix((np.array(trainMiWeight), (self.trainUser, self.trainItem)),
+        self.UserItemNet = csr_matrix((np.ones(len(self.trainUser)), (self.trainUser, self.trainItem)),
                                       shape=(self.n_user, self.m_item)) #第一参数: value, 第二个采纳数: index;
         # pdb.set_trace()
         # assert (self.UserItemNet.transpose() == self.UserItemNet).toarray().all() #必须是对称矩阵才能通过;
@@ -213,7 +188,8 @@ class GraphLoader():
                 # adj_mat = adj_mat + sp.eye(adj_mat.shape[0])
                 
                 rowsum = np.array(adj_mat.sum(axis=1))
-                d_inv = np.power(rowsum, -0.5).flatten()
+                # d_inv = np.power(rowsum, -0.5).flatten() 
+                d_inv = np.power(rowsum, -1.0).flatten() #remove square;
                 d_inv[np.isinf(d_inv)] = 0.
                 d_mat = sp.diags(d_inv) #(user_num + item_num)
                 

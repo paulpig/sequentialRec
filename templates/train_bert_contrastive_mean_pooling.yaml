@@ -77,7 +77,7 @@ relative_kernel_types: null
 experiment_root: experiments
 experiment_group: test
 # experiment_name: bert
-experiment_name: bert_mean_pooling_pretrain #输出结果的文件名; 上述三者构成输出结果的根目录; 例如/experiment_root/experiment_group/experiment_name
+experiment_name: bert_mean_pooling_pretrain_v2 #输出结果的文件名; 上述三者构成输出结果的根目录; 例如/experiment_root/experiment_group/experiment_name
 wandb_project_name: null
 wandb_run_name: null
 wandb_run_id: null

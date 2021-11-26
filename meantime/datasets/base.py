@@ -61,14 +61,21 @@ class AbstractDataset(metaclass=ABCMeta):
 
     def load_dataset(self):
         self.preprocess()
-        dataset_path = self._get_preprocessed_dataset_path()
+        # dataset_path = self._get_preprocessed_dataset_path()
+        if self.args.add_side_info_flag:
+            dataset_path = self._get_preprocessed_dataset_path_test()
+        else:
+            dataset_path = self._get_preprocessed_dataset_path()
         # dataset_path = self._get_preprocessed_dataset_path_test()
         dataset = pickle.load(dataset_path.open('rb'))
         return dataset
 
     def preprocess(self):
-        dataset_path = self._get_preprocessed_dataset_path()
-        # dataset_path = self._get_preprocessed_dataset_path_test()
+        if self.args.add_side_info_flag:
+            dataset_path = self._get_preprocessed_dataset_path_test()
+        else:
+            dataset_path = self._get_preprocessed_dataset_path()
+        
         if dataset_path.is_file() and self.args.skip_preprocess:
             print('Already preprocessed. Skip preprocessing')
             print(dataset_path)
@@ -124,7 +131,7 @@ class AbstractDataset(metaclass=ABCMeta):
         #                     item_id2cate_id[item_id] = cate2id[l[0]]
         #     dataset['item_id2cate_id'] = item_id2cate_id
         
-
+        # pdb.set_trace()
         #添加side information的数据;
         if self.args.add_side_info_flag:
             item_id2cate = dict()
@@ -159,6 +166,25 @@ class AbstractDataset(metaclass=ABCMeta):
             attribute2id["None"] =  len(attribute2id) + 1       
             dataset['item_id2side_id_tripe'] = [item_id2cate, item_id2price, item_id2brand]
             dataset['attribute2id'] = attribute2id
+            # pdb.set_trace()
+        
+        if self.args.add_behavior_type_neighbor_flag:
+            train_file = self.args.graph_path + self.args.graph_filename
+            item2id = smap
+            item2relItemList = {}
+            with open(train_file) as f:
+                for l in f.readlines():
+                    if len(l) > 0:
+                        l = l.strip('\n').split(' ')
+                        # items = [int(i) for i in l[1:]]
+                        # pdb.set_trace()
+                        items = [int(item2id[i]) for i in l[1:]]
+                        uid = int(item2id[l[0]])
+                        #convert string to int
+                        # uid = user2id[l[0]] #暂时不考虑user对模型的影响, 只考虑items共现的影响;
+                        # uid = int(l[0])
+                        item2relItemList[uid] = items
+            dataset['item2relItemList'] = item2relItemList
 
         with dataset_path.open('wb') as f:
             pickle.dump(dataset, f)
@@ -248,7 +274,7 @@ class AbstractDataset(metaclass=ABCMeta):
             raise ValueError
 
         #add Sparsity ratio
-        pdb.set_trace()
+        # pdb.set_trace()
         if self.args.sparsity_ratio !=1.0:
             # pdb.set_trace()
             print("-------------------------------sparsity ratio: {}------------------------------".format(self.args.sparsity_ratio))
@@ -281,5 +307,5 @@ class AbstractDataset(metaclass=ABCMeta):
     
     def _get_preprocessed_dataset_path_test(self):
         folder = self._get_preprocessed_folder_path()
-        return folder.joinpath('dataset_v2.pkl')
+        return folder.joinpath('dataset_attribute.pkl')
 

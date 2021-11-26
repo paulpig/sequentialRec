@@ -102,7 +102,7 @@ experiment_group: test
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_merge_rm_kgat
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_merge_rm_lightgcn
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_concat
-experiment_name: 5_core_both_view_buy_graph_sasrec_add_mi_exp
+experiment_name: 5_core_both_view_buy_graph_sasrec_add_mi_exp_pair
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_concat_20_100
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_graph_finetune_sasrec
 # experiment_name: 5_core_both_view_buy_no_pretrain_graph_finetune_sasrec_bot
@@ -123,7 +123,9 @@ graph_path: /pub/data/kyyx/wbc/MEANTIME/Data/beauty/
 graph_filename_kgat: beauty_item_attribute_triple.txt
 # graph_filename: 5_core_beauty_rm_2_low_items_graph_both_view_buy.txt
 graph_filename: beauty_graph_5_core_both_view_buy.txt
-graph_mi_filename: train_mi_scores.txt
+# graph_mi_filename: train_mi_scores.txt
+# graph_mi_filename: train_mi_scores_add_test.txt
+graph_mi_filename: train_mi_scores_pair.txt
 latent_dim_rec: 64
 # latent_dim_rec: 128
 lightGCN_n_layers: 2

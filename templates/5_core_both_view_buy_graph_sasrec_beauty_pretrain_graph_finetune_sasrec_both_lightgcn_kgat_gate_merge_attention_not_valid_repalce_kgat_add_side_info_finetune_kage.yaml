@@ -17,7 +17,9 @@ min_sc: 5
 split: leave_one_out
 dataloader_code: sas_side_info
 # dataloader_random_seed: 0.0
-dataloader_random_seed: 42.0
+# dataloader_random_seed: 42.0
+# dataloader_random_seed: 45
+dataloader_random_seed: 46
 train_batch_size: 256
 val_batch_size: 256
 test_batch_size: 256
@@ -29,13 +31,17 @@ train_negative_sampler_code: random #随机采样labels, sasrec的负样本从�
 # train_negative_sampler_code: popular #随机采样labels, sasrec的负样本从中构建;
 train_negative_sample_size: 1000 #sasrec负样本中1000中随机筛选一个;
 # train_negative_sampling_seed: 12345
-train_negative_sampling_seed: 42
+# train_negative_sampling_seed: 42
+# train_negative_sampling_seed: 45
+train_negative_sampling_seed: 46
 # test_negative_sampler_code: popular
 test_negative_sampler_code: random
 # test_negative_sample_size: 100
 test_negative_sample_size: 99
 # test_negative_sampling_seed: 98765
-test_negative_sampling_seed: 42
+# test_negative_sampling_seed: 42
+# test_negative_sampling_seed: 45
+test_negative_sampling_seed: 46
 trainer_code: graph_sasrec_improve_lightgcn_kgat_add_side_info
 device: cuda
 # use_parallel: true
@@ -67,7 +73,9 @@ saturation_wait_epochs: 20
 # model_code: sas_finetune_graph_improve_ablation_both_item_user
 model_code: graph_sasrec_improve_lightgcn_kgat_add_sideinfo
 # model_init_seed: 0
-model_init_seed: 42
+# model_init_seed: 42
+# model_init_seed: 45
+model_init_seed: 46
 model_init_range: 0.02
 # max_len: 200
 max_len: 50
@@ -105,7 +113,7 @@ experiment_group: test
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_merge_rm_lightgcn
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_concat
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_attention_20_20_hidden_add_valid_add_side_info_v9
-experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_attention_20_20_hidden_add_valid_add_side_info
+experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_attention_20_20_hidden_add_valid_add_side_info_attention_merge_project_same_space_v2
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_concat_20_100
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_graph_finetune_sasrec
 # experiment_name: 5_core_both_view_buy_no_pretrain_graph_finetune_sasrec_bot
@@ -147,7 +155,8 @@ rm_self_node: false
 # merge_type: rm_lightgcn
 # merge_type: gate
 # merge_type: concat
-merge_type: attention
+# merge_type: attention
+merge_type: attention_attribute
 # kgat_merge: lightgcn
 kgat_merge: bilinear
 # kgat_output: emb
