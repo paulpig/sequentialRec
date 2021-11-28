@@ -8,7 +8,7 @@ num_items: null
 num_ratings: null
 num_days: null
 local_data_folder: ./Data
-dataset_code: beauty
+dataset_code: toys
 # min_rating: 0
 min_rating: 0
 min_uc: 5
@@ -31,7 +31,7 @@ train_negative_sample_size: 1000 #sasrec负样本中1000中随机筛选一个;
 train_negative_sampling_seed: 42
 # test_negative_sampler_code: popular
 test_negative_sampler_code: random
-test_negative_sample_size: 99
+test_negative_sample_size: 100
 # test_negative_sampling_seed: 98765
 test_negative_sampling_seed: 42
 trainer_code: sas
@@ -58,7 +58,7 @@ metric_ks:
 best_metric: NDCG@10
 # saturation_wait_epochs: 20
 saturation_wait_epochs: 10
-model_code: sas
+model_code: sas_finetune
 # model_init_seed: 0
 model_init_seed: 42
 model_init_range: 0.02
@@ -86,7 +86,7 @@ absolute_kernel_types: null
 relative_kernel_types: null
 experiment_root: experiments
 experiment_group: test
-experiment_name: sas_baseline_new
+experiment_name: sas_baseline_toys_new
 wandb_project_name: null
 wandb_run_name: null
 wandb_run_id: null
@@ -96,3 +96,4 @@ add_cate_flag: false
 sparsity_ratio: 1.0
 skip_preprocess: true
 add_side_info_flag: false
+add_behavior_type_neighbor_flag: false

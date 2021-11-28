@@ -92,3 +92,4 @@ wandb_run_id: null
 meta: training
 finetune_flag: false
 add_cate_flag: false
+add_side_info_flag: false
