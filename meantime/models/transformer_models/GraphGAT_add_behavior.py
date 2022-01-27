@@ -30,13 +30,16 @@ class KGAT(BertBaseModel):
         self.A_split = self.config.A_split
         self.embedding_user = torch.nn.Embedding(
             num_embeddings=self.num_users, embedding_dim=self.latent_dim)
-        self.embedding_item = torch.nn.Embedding(
-            num_embeddings=self.num_items, embedding_dim=self.latent_dim)
+
+        self.embedding_item = self.embedding_user
+        # self.embedding_item = torch.nn.Embedding(
+        #     num_embeddings=self.num_items, embedding_dim=self.latent_dim)
 
         
         self.attribute_nums = len(self.dataset.attribute2id)
         self.rel_nums = len(self.dataset.rel2id)
 
+        self.dropout = nn.Dropout(p=0.5)
         self.embedding_rel = torch.nn.Embedding(
             num_embeddings=self.rel_nums, embedding_dim=self.latent_dim)
         # self.embedding_attribute = torch.nn.Embedding(
@@ -127,8 +130,9 @@ class KGAT(BertBaseModel):
         propagate methods for lightGCN
         """       
         users_emb = self.embedding_user.weight
-        items_emb = self.embedding_item.weight
-        all_emb = torch.cat([users_emb, items_emb])
+        # items_emb = self.embedding_item.weight
+        # all_emb = torch.cat([users_emb, items_emb])
+        all_emb = users_emb
         #   torch.split(all_emb , [self.num_users, self.num_items])
         # pdb.set_trace()
         embs = [all_emb]
@@ -163,13 +167,20 @@ class KGAT(BertBaseModel):
                 all_emb = torch.cat([all_emb_neighbor.unsqueeze(-2), all_emb.unsqueeze(-2)], dim=-2).max(dim=-2).values
             elif self.config.kgat_merge == "mean":
                 all_emb = torch.cat([all_emb_neighbor.unsqueeze(-2), all_emb.unsqueeze(-2)], dim=-2).mean(dim=-2)
+            elif self.config.kgat_merge == "none":
+                all_emb = all_emb_neighbor
+
+            #dropout and normalize
+            # all_emb = self.dropout(all_emb)
+            # all_emb = torch.nn.functional.normalize(all_emb, p=2, dim=1)
 
             embs.append(all_emb)
 
         embs = torch.stack(embs, dim=1)
         #print(embs.size())
         light_out = torch.mean(embs, dim=1)
-        users, items = torch.split(light_out, [self.num_users, self.num_items])
+        # users, items = torch.split(light_out, [self.num_users, self.num_items])
+        users, items = light_out, light_out
         return users, items
     
     def getUsersRating(self, users):
@@ -185,12 +196,13 @@ class KGAT(BertBaseModel):
         pos_emb = all_items[pos_items]
         neg_emb = all_items[neg_items]
         users_emb_ego = self.embedding_user(users) #embedding layers;
-        pos_emb_ego = self.embedding_item(pos_items)
-        neg_emb_ego = self.embedding_item(neg_items)
+        # pos_emb_ego = self.embedding_item(pos_items)
+        # neg_emb_ego = self.embedding_item(neg_items)
+        pos_emb_ego = self.embedding_user(pos_items)
+        neg_emb_ego = self.embedding_user(neg_items)
         return users_emb, pos_emb, neg_emb, users_emb_ego, pos_emb_ego, neg_emb_ego
     
     def bpr_loss(self, users, pos, neg, rel):
-        
         #以user表征为中心, item分别正负样本;
         (users_emb, pos_emb, neg_emb, 
         userEmb0,  posEmb0, negEmb0) = self.getEmbedding(users.long(), pos.long(), neg.long())
@@ -228,7 +240,7 @@ class KGAT(BertBaseModel):
         # all_users, all_items = self.computer()
         if self.config.kgat_output == "emb":
             all_users = self.embedding_user.weight
-            all_items = self.embedding_item.weight
+            all_items = self.embedding_user.weight
         elif self.config.kgat_output == "hidden":
             all_users, all_items = self.computer()
             
@@ -238,7 +250,7 @@ class KGAT(BertBaseModel):
     def getUserItemEmbOri(self):
         # all_users, all_items = self.computer()
         all_users = self.embedding_user.weight
-        all_items = self.embedding_item.weight
+        all_items = self.embedding_user.weight
             
         return all_users, all_items
 
@@ -259,8 +271,8 @@ class KGAT(BertBaseModel):
         # pdb.set_trace()
         head_embeddings = self.embedding_user(head)
         rel_embeddings = self.embedding_rel(rel)
-        tail_pos_embeddings = self.embedding_item(pos_tail) #(bs, dim)
-        tail_neg_embeddings = self.embedding_item(neg_tail)
+        tail_pos_embeddings = self.embedding_user(pos_tail) #(bs, dim)
+        tail_neg_embeddings = self.embedding_user(neg_tail)
 
         W_R_param = self.W_R[rel] #(bs, dim, dim)
         
@@ -272,14 +284,16 @@ class KGAT(BertBaseModel):
         neg_score = torch.sum(torch.pow(head_embeddings_h + rel_embeddings - tail_embeddings_neg_h, 2), dim=1)     # (kg_batch_size)
 
         # Equation (2)
-        kg_loss = (-1.0) * F.logsigmoid(neg_score - pos_score)
-        kg_loss = torch.mean(kg_loss)
+        # kg_loss = (-1.0) * F.logsigmoid(neg_score - pos_score)
+        # kg_loss = torch.mean(kg_loss)
+        kg_loss = torch.mean(torch.nn.functional.softplus(pos_score - neg_score))
+
 
         l2_loss = self._L2_loss_mean(head_embeddings_h) + self._L2_loss_mean(rel_embeddings) + self._L2_loss_mean(tail_embeddings_pos_h) + self._L2_loss_mean(tail_embeddings_neg_h)
         # pdb.set_trace()
         # loss = kg_loss + self.kg_l2loss_lambda * l2_loss
 
-        return kg_loss,  l2_loss
+        return kg_loss, l2_loss
 
     def _convert_sp_mat_to_sp_tensor(self, X):
         """
@@ -307,7 +321,7 @@ class KGAT(BertBaseModel):
         # the embedding layer
         head_embeddings = self.embedding_user(all_head)
         rel_embeddings = self.embedding_rel(all_r)
-        tail_pos_embeddings = self.embedding_item(all_tail) #(all, dim)
+        tail_pos_embeddings = self.embedding_user(all_tail) #(all, dim)
         W_R_param = self.W_R[all_r] #(all, dim, dim)
 
 
@@ -323,12 +337,13 @@ class KGAT(BertBaseModel):
         attention_matrix_score = csr_matrix((attention_score, (self.all_head_list, self.all_tail_list)),
                                       shape=(self.num_users, self.num_items)) #第一参数: value, 第二个采纳数: index;
 
-        adj_mat = sp.dok_matrix((self.num_users + self.num_items, self.num_users + self.num_items), dtype=np.float32) #为什么构建(user_num + item_num, user_num + item_num)矩阵;
-        adj_mat = adj_mat.tolil() #convert list of lists format;
+        # adj_mat = sp.dok_matrix((self.num_users + self.num_items, self.num_users + self.num_items), dtype=np.float32) #为什么构建(user_num + item_num, user_num + item_num)矩阵;
+        # adj_mat = adj_mat.tolil() #convert list of lists format;
         R = attention_matrix_score.tolil()
-        adj_mat[:self.num_users, self.num_users:] = R
-        adj_mat[self.num_users:, :self.num_users] = R.T
-        adj_mat = adj_mat.tocsr() #convert dictionary of Keys format;
+        # adj_mat[:self.num_users, self.num_users:] = R
+        # adj_mat[self.num_users:, :self.num_users] = R.T
+        # adj_mat = adj_mat.tocsr() #convert dictionary of Keys format;
+        adj_mat = R.tocsr()
 
         attention_matrix_score_tensor = self._convert_sp_mat_to_sp_tensor(adj_mat)
         

@@ -65,4 +65,5 @@ def validate(args, mode='val'):
     if args.pretrained_weights is not None:
         model.load(args.pretrained_weights)
     trainer = trainer_factory(args, model, train_loader, val_loader, test_loader, local_export_root)
+    # pdb.set_trace()
     trainer.just_validate(mode)

@@ -268,8 +268,8 @@ def UniformSample_original_KGE(dataset, rel_type=None):
     userNum = len(graph_kge_dict.keys())
     all_head = list(graph_kge_dict.keys())
     trainNumber = len(dataset.all_head_list)
-    attribute_voc = len(dataset.attribute2id)
-
+    attribute_voc = max([item[1] for item in dataset.attribute2id.items()]) + 1
+    # attribute_voc = len()
     # print("trainData: ", trainNumber, trainNumber//1000)
     # trainNumber = trainNumber // 10000
     # pdb.set_trace()

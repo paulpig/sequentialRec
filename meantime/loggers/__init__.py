@@ -100,10 +100,10 @@ class BestModelLogger(AbstractBaseLogger):
         if self.best_metric < current_metric:
             print("Update Best {} Model at {}".format(self.metric_key, kwargs['epoch']))
             self.best_metric = current_metric
-            save_state_dict(kwargs['state_dict'], self.checkpoint_path, self.filename + '_' + kwargs['train_type'])
+            save_state_dict(kwargs['state_dict'], self.checkpoint_path, self.filename + '_' + kwargs['train_type'] + '_best')
 
     def filepath(self):
-        return os.path.join(self.checkpoint_path, self.filename + '_' + self.train_type)
+        return os.path.join(self.checkpoint_path, self.filename + '_' + self.train_type + '_best')
 
 
 class WandbLogger(AbstractBaseLogger):

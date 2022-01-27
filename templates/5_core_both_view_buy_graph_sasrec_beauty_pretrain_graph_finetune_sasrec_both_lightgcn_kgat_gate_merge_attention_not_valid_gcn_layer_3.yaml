@@ -9,18 +9,15 @@ num_items: null
 num_ratings: null
 num_days: null
 local_data_folder: ./Data
-# dataset_code: beauty
-dataset_code: sports
+dataset_code: beauty
 # min_rating: 0
 min_rating: 0
 min_uc: 5
 min_sc: 5
 split: leave_one_out
-dataloader_code: sas_behavior_rel
+dataloader_code: sas
 # dataloader_random_seed: 0.0
-# dataloader_random_seed: 42.0
-# dataloader_random_seed: 45
-dataloader_random_seed: 49
+dataloader_random_seed: 42.0
 train_batch_size: 256
 val_batch_size: 256
 test_batch_size: 256
@@ -32,18 +29,14 @@ train_negative_sampler_code: random #随机采样labels, sasrec的负样本从�
 # train_negative_sampler_code: popular #随机采样labels, sasrec的负样本从中构建;
 train_negative_sample_size: 1000 #sasrec负样本中1000中随机筛选一个;
 # train_negative_sampling_seed: 12345
-# train_negative_sampling_seed: 42
-# train_negative_sampling_seed: 45
-train_negative_sampling_seed: 49
+train_negative_sampling_seed: 42
 # test_negative_sampler_code: popular
 test_negative_sampler_code: random
 # test_negative_sample_size: 100
 test_negative_sample_size: 99
 # test_negative_sampling_seed: 98765
-# test_negative_sampling_seed: 42
-# test_negative_sampling_seed: 45
-test_negative_sampling_seed: 49
-trainer_code: graph_sasrec_improve_lightgcn_kgat_behavoir_rel_items_shared_lightgcn_add_kgat
+test_negative_sampling_seed: 42
+trainer_code: graph_sasrec_improve_lightgcn_kgat
 device: cuda
 # use_parallel: true
 use_parallel: false
@@ -72,17 +65,13 @@ saturation_wait_epochs: 20
 # model_code: sas
 # model_code: sas_finetune
 # model_code: sas_finetune_graph_improve_ablation_both_item_user
-model_code: graph_sasrec_improve_lightgcn_kgat_behavoir_rel_items_shared_lightgcn_add_kgat_better_fusion
+model_code: graph_sasrec_improve_lightgcn_kgat
 # model_init_seed: 0
-# model_init_seed: 42
-# model_init_seed: 45
-model_init_seed: 49
+model_init_seed: 42
 model_init_range: 0.02
 # max_len: 200
 max_len: 50
 hidden_units: 64
-feature_dim: 64
-# hidden_units: 124
 # hidden_units: 128
 num_blocks: 2
 num_heads: 2
@@ -113,15 +102,7 @@ experiment_group: test
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_merge_rm_kgat
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_merge_rm_lightgcn
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_concat
-# experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_attention_20_20_hidden_add_valid_add_side_info_v9
-# experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_attention_20_20_hidden_add_valid_add_rel_behavior_no_finetuning_behavior_graph
-# experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_attention_20_20_hidden_add_valid_add_rel_behavior_retraining_v2_nofinetuning_behavior_graph
-# experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_attention_20_20_hidden_add_valid_add_rel_behavior_retraining_v2_10_v2
-# experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_attention_20_20_hidden_both_user_rep
-# experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_attention_20_20_hidden_user_item_rep
-# experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_attention_20_20_hidden_simply_add_behavior_rels
-experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_attention_20_20_hidden_add_ori_behavior_data_shared_items_better_fusion_gate_layer_sports_v11_layer_2
-# experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_attention_20_20_hidden_add_ori_behavior_data_shared_items_simple_add
+experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_attention_20_20_hidden_add_valid_v3_layer_3
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_lightgcn_kgat_gate_concat_20_100
 # experiment_name: 5_core_both_view_buy_graph_sasrec_beauty_pretrain_graph_finetune_sasrec
 # experiment_name: 5_core_both_view_buy_no_pretrain_graph_finetune_sasrec_bot
@@ -137,17 +118,14 @@ meta: training
 # resume_training: true
 finetune_flag: false
 resume_training: false
-graph_path: /pub/data/kyyx/wbc/MEANTIME/Data/sports/
+graph_path: /pub/data/kyyx/wbc/MEANTIME/Data/beauty/
 # graph_filename: 5_core_beauty_rm_2_low_items_graph_both_view_buy.txt
-# graph_filename_kgat: beauty_item_attribute_triple.txt
-# # graph_filename: 5_core_beauty_rm_2_low_items_graph_both_view_buy.txt
-# graph_filename: beauty_graph_5_core_both_view_buy.txt
-graph_filename_kgat: sports_item_attribute_triple.txt
-# graph_filename: 5_core_sports_rm_2_low_items_graph_both_view_buy.txt
-graph_filename: sports_graph_5_core_both_buy_view.txt
+graph_filename_kgat: beauty_item_attribute_triple.txt
+# graph_filename: 5_core_beauty_rm_2_low_items_graph_both_view_buy.txt
+graph_filename: beauty_graph_5_core_both_view_buy.txt
 latent_dim_rec: 64
 # latent_dim_rec: 128
-lightGCN_n_layers: 2
+lightGCN_n_layers: 3
 keep_prob: 0.5
 A_split: false
 graph_pretrain: false
@@ -158,7 +136,7 @@ graph_attribute_epochs: 20
 # graph_epochs: 1
 bpr_batch_size: 2048
 add_graph_flag: true
-gru_layer_number: 2
+gru_layer_number: 3
 add_cate_flag: false
 kg_l2loss_lambda: 0.0
 rm_self_node: false
@@ -166,16 +144,11 @@ rm_self_node: false
 # merge_type: rm_lightgcn
 # merge_type: gate
 # merge_type: concat
-# merge_type: attention
-merge_type: behavior_rel_items
-# merge_type: add
+merge_type: attention
 # kgat_merge: lightgcn
 kgat_merge: bilinear
 # kgat_output: emb
 kgat_output: hidden
 sparsity_ratio: 1.0
-add_side_info_flag: true
 skip_preprocess: true
-add_behavior_type_neighbor_flag: true
-sample_num: 10
-encoder_type: sasrec
+add_side_info_flag: true
